@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -16,18 +16,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
       - name: Build debug APK
-        run: |
-          gradle assembleDebug --console=plain > build.log 2>&1 || {
-            grep -E "^e: |What went wrong|error:|FAILED" -A4 build.log | head -40
-            exit 1
-          }
+        run: gradle assembleDebug --console=plain --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
