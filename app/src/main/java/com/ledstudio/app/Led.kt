@@ -7,6 +7,8 @@ import android.content.Context
 import android.graphics.Color
 import android.os.Build
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.graphics.ColorUtils
+import kotlinx.coroutines.*
 import java.util.UUID
 
 @SuppressLint("MissingPermission")
@@ -19,7 +21,43 @@ object Led {
     val status = mutableStateOf("Not connected")
     val bright = mutableStateOf(1f)
 
+    // --- smooth renderer: everything goes through fadeTo(); one loop sends frames ---
+    private var from = Color.BLACK; private var to = Color.BLACK
+    private var t0 = 0L; private var dur = 0L; private var ease = false
+    @Volatile var cur = Color.BLACK
+    @Volatile private var busy = false
+    private var lastSent = -1
+    private var job: Job? = null
+
     fun hsv(h: Float) = Color.HSVToColor(floatArrayOf(h, 1f, 1f))
+
+    @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false) {
+        from = cur; to = c; t0 = System.nanoTime(); dur = ms * 1_000_000; ease = smooth
+    }
+
+    @Synchronized private fun compute(): Int {
+        if (dur <= 0) return to
+        var t = ((System.nanoTime() - t0).toFloat() / dur).coerceIn(0f, 1f)
+        if (ease) t = t * t * (3 - 2 * t)
+        return ColorUtils.blendARGB(from, to, t)
+    }
+
+    private fun startRender() {
+        if (job?.isActive == true) return
+        job = CoroutineScope(Dispatchers.Default).launch {
+            var lastWrite = 0L
+            while (isActive) {
+                val c = compute(); cur = c
+                val k = bright.value
+                val key = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
+                val now = System.currentTimeMillis()
+                if (key != lastSent && (!busy || now - lastWrite > 80)) {
+                    if (write(key)) { lastSent = key; lastWrite = now }
+                }
+                delay(25)
+            }
+        }
+    }
 
     fun connect(ctx: Context) {
         val sc = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter?.bluetoothLeScanner
@@ -37,24 +75,28 @@ object Led {
 
     private val cb = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, s: Int, n: Int) {
-            if (n == BluetoothProfile.STATE_CONNECTED) g.discoverServices()
+            if (n == BluetoothProfile.STATE_CONNECTED) { g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH); g.discoverServices() }
             else { chr = null; status.value = "Disconnected" }
         }
         override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
             chr = g.getService(SVC)?.getCharacteristic(CHR)
             status.value = if (chr != null) "Connected" else "Service not found"
+            lastSent = -1; busy = false
+            if (chr != null) startRender()
         }
+        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, s: Int) { busy = false }
     }
 
     // Protocol (tested): 7B FF 07 R G B 00 FF BF on 0xFFE1
-    fun color(c: Int) {
-        val ch = chr ?: return
-        val g = gatt ?: return
-        val k = bright.value
-        val b = byteArrayOf(0x7B, 0xFF.toByte(), 0x07,
-            (Color.red(c) * k).toInt().toByte(), (Color.green(c) * k).toInt().toByte(), (Color.blue(c) * k).toInt().toByte(),
-            0, 0xFF.toByte(), 0xBF.toByte())
-        if (Build.VERSION.SDK_INT >= 33) g.writeCharacteristic(ch, b, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+    private fun write(c: Int): Boolean {
+        val ch = chr ?: return false
+        val g = gatt ?: return false
+        val b = byteArrayOf(0x7B, 0xFF.toByte(), 0x07, Color.red(c).toByte(), Color.green(c).toByte(), Color.blue(c).toByte(), 0, 0xFF.toByte(), 0xBF.toByte())
+        busy = true
+        val ok = if (Build.VERSION.SDK_INT >= 33)
+            g.writeCharacteristic(ch, b, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) == BluetoothStatusCodes.SUCCESS
         else { ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE; ch.value = b; g.writeCharacteristic(ch) }
+        if (!ok) busy = false
+        return ok
     }
 }
