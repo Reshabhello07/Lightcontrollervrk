@@ -41,6 +41,7 @@ fun perms(): Array<String> {
 
 fun stopAll(ctx: Context) { Engine.stop(); ctx.stopService(Intent(ctx, LedService::class.java)) }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun App() {
     val ctx = LocalContext.current
@@ -49,13 +50,19 @@ fun App() {
     var sens by remember { mutableStateOf(1f) }
     var smooth by remember { mutableStateOf(0.9f) }
     var useCover by remember { mutableStateOf(true) }
+    var pending by remember { mutableStateOf("music") }
+    var style by remember { mutableStateOf(0) }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { Led.connect(ctx) }
     val cap = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == Activity.RESULT_OK && r.data != null) {
             ctx.startForegroundService(Intent(ctx, LedService::class.java)
-                .putExtra("code", r.resultCode).putExtra("data", r.data)
+                .putExtra("code", r.resultCode).putExtra("data", r.data).putExtra("mode", pending).putExtra("style", style)
                 .putExtra("cover", useCover).putExtra("color", Led.hsv(hue)).putExtra("sens", sens))
         }
+    }
+    fun go(mode: String, st: Int = 0) {
+        stopAll(ctx); pending = mode; style = st
+        cap.launch(ctx.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
     }
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -79,16 +86,34 @@ fun App() {
         Text("Smoothness")
         Slider(value = smooth, onValueChange = { smooth = it; Engine.decay = it }, valueRange = 0.75f..0.97f)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = useCover, onCheckedChange = { useCover = it }); Spacer(Modifier.width(8.dp)); Text("Use album cover color")
+            Switch(checked = useCover, onCheckedChange = { useCover = it }); Spacer(Modifier.width(8.dp)); Text("Use album cover colors")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                stopAll(ctx)
-                cap.launch(ctx.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
-            }) { Text("Music sync") }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { go("music", 0) }) { Text("Breathing") }
+            Button(onClick = { go("music", 1) }) { Text("Spectrum") }
+            Button(onClick = { go("music", 2) }) { Text("Smart tempo") }
             Button(onClick = { stopAll(ctx); Engine.cover() }) { Text("Cover mesh") }
         }
-        TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Grant notification access (for covers)") }
+        if (Engine.bpm.value > 0) Text("Tempo: ${Engine.bpm.value} BPM")
+
+        HorizontalDivider()
+        Text("Screen sync", style = MaterialTheme.typography.titleMedium)
+        Button(onClick = { go("screen") }) { Text("Turn on screen sync") }
+
+        HorizontalDivider()
+        Text("Scenes", style = MaterialTheme.typography.titleMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Thunderstorm" to "thunder", "Candle" to "candle", "Aurora" to "aurora", "Ocean" to "ocean", "Lava" to "lava").forEach { (n, k) ->
+                Button(onClick = { stopAll(ctx); Engine.scene(k) }) { Text(n) }
+            }
+        }
+
+        HorizontalDivider()
+        Text("Notifications", style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = Engine.notifOn.value, onCheckedChange = { Engine.notifOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Pulse on notifications")
+        }
+        TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Grant notification access") }
 
         HorizontalDivider()
         Text("Effects", style = MaterialTheme.typography.titleMedium)

@@ -31,7 +31,18 @@ object Led {
 
     fun hsv(h: Float) = Color.HSVToColor(floatArrayOf(h, 1f, 1f))
 
-    @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false) {
+    @Volatile private var holdUntil = 0L
+
+    fun pulse(c: Int) {
+        if (System.currentTimeMillis() < holdUntil) return
+        val prev = cur
+        holdUntil = System.currentTimeMillis() + 1400
+        fadeTo(c, 150, false, true)
+        CoroutineScope(Dispatchers.Default).launch { delay(900); holdUntil = 0; fadeTo(prev, 500, true, true) }
+    }
+
+    @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false, force: Boolean = false) {
+        if (!force && System.currentTimeMillis() < holdUntil) return
         from = cur; to = c; t0 = System.nanoTime(); dur = ms * 1_000_000; ease = smooth
     }
 
