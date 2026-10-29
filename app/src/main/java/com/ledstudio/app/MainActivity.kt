@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(b: Bundle?) {
@@ -66,6 +68,10 @@ fun App() {
     var fxName by remember { mutableStateOf("") }
     val favs = remember { mutableStateMapOf<Int, String>().apply { putAll(loadFavs(ctx)) } }
     fun playFx(id: Int) { stopAll(ctx); Engine.fx.value = id; Led.effect(id) }
+    LaunchedEffect(Unit) {   // auto-connect on open when permissions are already granted
+        if (Build.VERSION.SDK_INT < 31 || (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                    ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)) Led.connect(ctx)
+    }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { Led.connect(ctx) }
     val cap = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == Activity.RESULT_OK && r.data != null) {
@@ -86,8 +92,9 @@ fun App() {
             Button(onClick = { perm.launch(perms()) }) { Text("Connect") }
             OutlinedButton(onClick = { stopAll(ctx); Led.fadeTo(Color.BLACK, 400, true) }) { Text("Off") }
         }
-        Text("Brightness")
-        Slider(value = Led.bright.value, onValueChange = { Led.bright.value = it }, valueRange = 0.05f..1f)
+        Text("Brightness: ${(Led.bright.value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
+        Slider(value = Led.bright.value * 100f, onValueChange = { Led.bright.value = it.roundToInt() / 100f },
+            valueRange = 5f..Led.MAX_PCT.toFloat(), steps = Led.MAX_PCT - 6)
         Text("Speed")
         Slider(value = spd, onValueChange = { spd = it; Engine.speed = it }, valueRange = 0.25f..4f)
         Text("Color")
