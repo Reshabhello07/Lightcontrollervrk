@@ -72,6 +72,7 @@ object Engine {
     @Volatile var decay = 0.9f
     val notifOn = mutableStateOf(true)
     val bpm = mutableStateOf(0)
+    val fx = mutableStateOf(1)
 
     fun init(c: Context) { app = c.applicationContext }
     fun stop() { job?.cancel(); bpm.value = 0 }
@@ -96,6 +97,11 @@ object Engine {
             Led.fadeTo(cs[i++ % cs.size], f, true)
             delay(f)
         }
+    }
+
+    fun cycle(from: Int, to: Int, sec: Int) = run {
+        var i = from
+        while (isActive) { fx.value = i; Led.effect(i); delay(sec * 1000L); i = if (i >= to) from else i + 1 }
     }
 
     // ---- Cinematic scenes ----
@@ -160,6 +166,7 @@ object Engine {
             while (isActive) {
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) continue
+                if (style != 2) decayK = decay
                 var sb = 0f; var sm = 0f; var sh = 0f
                 for (i in 0 until n) {
                     val x = buf[i] / 32768f

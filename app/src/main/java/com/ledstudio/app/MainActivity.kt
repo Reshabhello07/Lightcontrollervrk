@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(b: Bundle?) {
@@ -39,6 +40,15 @@ fun perms(): Array<String> {
     return l.toTypedArray()
 }
 
+fun loadFavs(c: Context): Map<Int, String> {
+    val o = JSONObject(c.getSharedPreferences("fx", 0).getString("f", "{}") ?: "{}")
+    return o.keys().asSequence().associate { it.toInt() to o.getString(it) }
+}
+fun saveFavs(c: Context, m: Map<Int, String>) {
+    val o = JSONObject(); m.forEach { (k, v) -> o.put(k.toString(), v) }
+    c.getSharedPreferences("fx", 0).edit().putString("f", o.toString()).apply()
+}
+
 fun stopAll(ctx: Context) { Engine.stop(); ctx.stopService(Intent(ctx, LedService::class.java)) }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -52,6 +62,10 @@ fun App() {
     var useCover by remember { mutableStateOf(true) }
     var pending by remember { mutableStateOf("music") }
     var style by remember { mutableStateOf(0) }
+    var pix by remember { mutableStateOf(200f) }
+    var fxName by remember { mutableStateOf("") }
+    val favs = remember { mutableStateMapOf<Int, String>().apply { putAll(loadFavs(ctx)) } }
+    fun playFx(id: Int) { stopAll(ctx); Engine.fx.value = id; Led.effect(id) }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { Led.connect(ctx) }
     val cap = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == Activity.RESULT_OK && r.data != null) {
@@ -114,6 +128,33 @@ fun App() {
             Switch(checked = Engine.notifOn.value, onCheckedChange = { Engine.notifOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Pulse on notifications")
         }
         TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Grant notification access") }
+
+        HorizontalDivider()
+        Text("Built-in effects", style = MaterialTheme.typography.titleMedium)
+        Text("Effect #${Engine.fx.value}" + (favs[Engine.fx.value]?.let { " - $it" } ?: ""))
+        Slider(value = Engine.fx.value.toFloat(), onValueChange = { Engine.fx.value = it.toInt() },
+            onValueChangeFinished = { playFx(Engine.fx.value) }, valueRange = 1f..210f)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { playFx((Engine.fx.value - 2).mod(210) + 1) }) { Text("Prev") }
+            Button(onClick = { playFx(Engine.fx.value.mod(210) + 1) }) { Text("Next") }
+            OutlinedButton(onClick = { stopAll(ctx); Engine.cycle(1, 210, 4) }) { Text("Auto-browse") }
+        }
+        OutlinedTextField(value = fxName, onValueChange = { fxName = it }, label = { Text("Name this effect") }, singleLine = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { favs[Engine.fx.value] = fxName.ifBlank { "Effect ${Engine.fx.value}" }; saveFavs(ctx, favs); fxName = "" }) { Text("Save favorite") }
+            if (favs.containsKey(Engine.fx.value)) TextButton(onClick = { favs.remove(Engine.fx.value); saveFavs(ctx, favs) }) { Text("Remove") }
+        }
+        favs.toSortedMap().forEach { (id, n) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$n (#$id)", Modifier.weight(1f))
+                Button(onClick = { playFx(id) }) { Text("Play") }
+            }
+        }
+
+        HorizontalDivider()
+        Text("Pixel count: ${pix.toInt()}", style = MaterialTheme.typography.titleMedium)
+        Slider(value = pix, onValueChange = { pix = it }, valueRange = 1f..255f)
+        Button(onClick = { Led.setPixels(pix.toInt()) }) { Text("Apply pixel count") }
 
         HorizontalDivider()
         Text("Effects", style = MaterialTheme.typography.titleMedium)

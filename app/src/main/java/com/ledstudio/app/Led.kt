@@ -25,6 +25,7 @@ object Led {
     private var from = Color.BLACK; private var to = Color.BLACK
     private var t0 = 0L; private var dur = 0L; private var ease = false
     @Volatile var cur = Color.BLACK
+    @Volatile var paused = false   // true while a built-in effect runs on the strip
     @Volatile private var busy = false
     private var lastSent = -1
     private var job: Job? = null
@@ -34,7 +35,7 @@ object Led {
     @Volatile private var holdUntil = 0L
 
     fun pulse(c: Int) {
-        if (System.currentTimeMillis() < holdUntil) return
+        if (paused || System.currentTimeMillis() < holdUntil) return
         val prev = cur
         holdUntil = System.currentTimeMillis() + 1400
         fadeTo(c, 150, false, true)
@@ -43,6 +44,7 @@ object Led {
 
     @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false, force: Boolean = false) {
         if (!force && System.currentTimeMillis() < holdUntil) return
+        if (paused) { paused = false; lastSent = -1 }
         from = cur; to = c; t0 = System.nanoTime(); dur = ms * 1_000_000; ease = smooth
     }
 
@@ -62,7 +64,7 @@ object Led {
                 val k = bright.value
                 val key = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
                 val now = System.currentTimeMillis()
-                if (key != lastSent && (!busy || now - lastWrite > 80)) {
+                if (!paused && key != lastSent && (!busy || now - lastWrite > 80)) {
                     if (write(key)) { lastSent = key; lastWrite = now }
                 }
                 delay(25)
@@ -99,10 +101,12 @@ object Led {
     }
 
     // Protocol (tested): 7B FF 07 R G B 00 FF BF on 0xFFE1
-    private fun write(c: Int): Boolean {
+    private fun write(c: Int) = writeBytes(byteArrayOf(0x7B, 0xFF.toByte(), 0x07,
+        Color.red(c).toByte(), Color.green(c).toByte(), Color.blue(c).toByte(), 0, 0xFF.toByte(), 0xBF.toByte()))
+
+    private fun writeBytes(b: ByteArray): Boolean {
         val ch = chr ?: return false
         val g = gatt ?: return false
-        val b = byteArrayOf(0x7B, 0xFF.toByte(), 0x07, Color.red(c).toByte(), Color.green(c).toByte(), Color.blue(c).toByte(), 0, 0xFF.toByte(), 0xBF.toByte())
         busy = true
         val ok = if (Build.VERSION.SDK_INT >= 33)
             g.writeCharacteristic(ch, b, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) == BluetoothStatusCodes.SUCCESS
@@ -110,4 +114,12 @@ object Led {
         if (!ok) busy = false
         return ok
     }
+
+    // From the snoop log: 03 = built-in effect number, 05 04 00 <n> 03 = pixel count
+    private fun raw(vararg v: Int) {
+        val b = ByteArray(9) { v[it].toByte() }
+        CoroutineScope(Dispatchers.Default).launch { repeat(10) { if (writeBytes(b)) return@launch; delay(30) } }
+    }
+    fun effect(id: Int) { paused = true; raw(0x7B, 0xFF, 0x03, id, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF) }
+    fun setPixels(n: Int) = raw(0x7B, 0xFF, 0x05, 0x04, 0x00, n.coerceIn(1, 255), 0x03, 0xFF, 0xBF)
 }
