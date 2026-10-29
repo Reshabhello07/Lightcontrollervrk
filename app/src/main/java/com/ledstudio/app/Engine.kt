@@ -1,5 +1,6 @@
 package com.ledstudio.app
 
+import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Color
@@ -30,8 +31,20 @@ val NOTIF_COLORS = mapOf(
 
 class CoverService : NotificationListenerService() {
     override fun onNotificationPosted(s: StatusBarNotification) {
-        if (!Engine.notifOn.value || s.isOngoing || s.packageName == packageName) return
+        val n = s.notification
+        if (s.packageName == packageName) return
+        if (n.category == Notification.CATEGORY_CALL) {
+            val type = n.extras.getInt("android.callType", 0)   // 1 incoming, 2 ongoing
+            if (type == 1 || (type == 0 && !s.isOngoing)) Extras.ringStart(n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "?")
+            else Extras.ringStop()
+            return
+        }
+        val media = n.category == Notification.CATEGORY_TRANSPORT || n.extras.containsKey(Notification.EXTRA_MEDIA_SESSION)
+        if (!Engine.notifOn.value || s.isOngoing || media) return
         Led.pulse(NOTIF_COLORS[s.packageName] ?: Color.WHITE)
+    }
+    override fun onNotificationRemoved(s: StatusBarNotification) {
+        if (s.notification.category == Notification.CATEGORY_CALL) Extras.ringStop()
     }
 }
 
@@ -74,8 +87,8 @@ object Engine {
     val bpm = mutableStateOf(0)
     val fx = mutableStateOf(1)
 
-    fun init(c: Context) { app = c.applicationContext }
-    fun stop() { job?.cancel(); bpm.value = 0 }
+    fun init(c: Context) { app = c.applicationContext; Extras.initPhone(app) }
+    fun stop() { job?.cancel(); bpm.value = 0; Extras.mcStop() }
     private fun run(block: suspend CoroutineScope.() -> Unit) { stop(); job = scope.launch(block = block) }
     private fun hsvC(h: Float, s: Float, v: Float) = Color.HSVToColor(floatArrayOf(h, s, v.coerceIn(0f, 1f)))
     private fun rot(c: Int, d: Float): Int { val h = FloatArray(3); Color.colorToHSV(c, h); h[0] = (h[0] + d) % 360f; return Color.HSVToColor(h) }
@@ -160,6 +173,7 @@ object Engine {
         val pk = floatArrayOf(.02f, .02f, .02f); val lv = FloatArray(3); val env = FloatArray(3)
         var tick = 0; var ci = 0; var prev = 0f; var lastBeat = 0L; var decayK = decay
         val ibi = ArrayList<Long>()
+        var phase = 0; var quietSince = 0L; var buildStart = 0L; var dropAt = 0L; var lastDrop = 0L
         var pal = if (fixed == null) Cover.cols else listOf(fixed, rot(fixed, 120f), rot(fixed, 240f))
         rec.startRecording()
         try {
@@ -195,6 +209,18 @@ object Engine {
                     }
                     prev = lv[0]
                 }
+                if (style == 3) {   // beat drop: quiet build-up -> blast -> new colour
+                    val air = lv[1] + lv[2]
+                    when (phase) {
+                        0 -> if (env[0] < 0.12f && air > 0.2f) {
+                                if (quietSince == 0L) quietSince = now
+                                if (now - quietSince > 1200 && now - lastDrop > 4000) { phase = 1; buildStart = now }
+                            } else quietSince = 0L
+                        1 -> if (lv[0] > 0.7f && now - buildStart > 600) { phase = 2; dropAt = now; lastDrop = now; ci++ }
+                             else if (now - buildStart > 20000) phase = 0
+                        2 -> if (now - dropAt > 180) { phase = 0; quietSince = 0L }
+                    }
+                }
                 val out = when (style) {
                     1 -> {
                         var r = 0; var g = 0; var b = 0
@@ -202,9 +228,14 @@ object Engine {
                         Color.rgb(maxOf(r, 8).coerceAtMost(255), maxOf(g, 8).coerceAtMost(255), maxOf(b, 8).coerceAtMost(255))
                     }
                     2 -> ColorUtils.blendARGB(Color.BLACK, pal[ci % pal.size], 0.05f + 0.95f * env[0])
+                    3 -> when (phase) {
+                        1 -> ColorUtils.blendARGB(Color.BLACK, pal[(ci + 1) % pal.size], 0.02f + 0.2f * lv[2])
+                        2 -> Color.WHITE
+                        else -> ColorUtils.blendARGB(Color.BLACK, pal[ci % pal.size], 0.05f + 0.95f * env[0])
+                    }
                     else -> ColorUtils.blendARGB(Color.BLACK, pal[0], 0.05f + 0.95f * env[0])
                 }
-                Led.fadeTo(out, if (style == 2) 50 else 70)
+                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; style == 2 -> 50L; else -> 70L })
             }
         } finally { rec.release() }
     }

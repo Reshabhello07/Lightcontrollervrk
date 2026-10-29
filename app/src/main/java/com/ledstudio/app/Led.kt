@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.*
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Handler
@@ -36,14 +37,14 @@ object Led {
 
     fun hsv(h: Float) = Color.HSVToColor(floatArrayOf(h, 1f, 1f))
 
-    @Volatile private var holdUntil = 0L
+    @Volatile var holdUntil = 0L
 
-    fun pulse(c: Int) {
+    fun pulse(c: Int, ms: Long = 900) {
         if (paused || System.currentTimeMillis() < holdUntil) return
         val prev = cur
-        holdUntil = System.currentTimeMillis() + 1400
+        holdUntil = System.currentTimeMillis() + ms + 500
         fadeTo(c, 150, false, true)
-        CoroutineScope(Dispatchers.Default).launch { delay(900); holdUntil = 0; fadeTo(prev, 500, true, true) }
+        CoroutineScope(Dispatchers.Default).launch { delay(ms); holdUntil = 0; fadeTo(prev, 500, true, true) }
     }
 
     @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false, force: Boolean = false) {
@@ -129,6 +130,11 @@ object Led {
         main.post { gatt = d.connectGatt(app, false, cb, BluetoothDevice.TRANSPORT_LE) }
     }
 
+    private fun keepAlive() {
+        val a = appCtx ?: return
+        try { a.startForegroundService(Intent(a, KeepAliveService::class.java)) } catch (e: Exception) { }
+    }
+
     private val cb = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, s: Int, n: Int) {
             if (n == BluetoothProfile.STATE_CONNECTED && s == BluetoothGatt.GATT_SUCCESS) {
@@ -150,7 +156,7 @@ object Led {
         }
         override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
             chr = g.getService(SVC)?.getCharacteristic(CHR)
-            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; startRender() }
+            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; startRender(); keepAlive() }
             else status.value = "Strip service not found"
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, s: Int) { busy = false }
