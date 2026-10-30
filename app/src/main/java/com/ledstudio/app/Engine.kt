@@ -80,6 +80,7 @@ object Engine {
     private lateinit var app: Context
     @Volatile var speed = 1f
     @Volatile var decay = 0.9f
+    @Volatile var breathSpeed = 5f   // 1 (slow) .. 10 (fast), set from the slider
     val notifOn = mutableStateOf(true)
     val bpm = mutableStateOf(0)
     val fx = mutableStateOf(1)
@@ -188,11 +189,12 @@ object Engine {
                 // comfortable breathing: follow the song's loudness against its own recent quiet/loud range
                 val ld = kotlin.math.ln(0.75f * e[0] + 0.25f * e[1] + 1e-4f)
                 if (!inited) { lo = ld - 1f; hiV = ld + 1f; inited = true }
-                lo = if (ld < lo) lo + (ld - lo) * 0.05f else lo + 0.0004f
-                hiV = if (ld > hiV) hiV + (ld - hiV) * 0.05f else hiV - 0.0006f
-                val nrm = ((ld - lo) / (hiV - lo).coerceAtLeast(1.2f)).coerceIn(0f, 1f)
-                val goal = 0.12f + 0.75f * nrm.pow(1.3f)
-                breath += (goal - breath) * (if (goal > breath) 0.15f else (1f - decay) * 0.6f)
+                lo = if (ld < lo) lo + (ld - lo) * 0.05f else lo + 0.0006f
+                hiV = if (ld > hiV) hiV + (ld - hiV) * 0.08f else hiV - 0.001f
+                val nrm = ((ld - lo) / (hiV - lo).coerceAtLeast(0.8f)).coerceIn(0f, 1f)
+                val goal = 0.08f + 0.84f * nrm
+                val sp = (breathSpeed - 1f) / 9f
+                breath += (goal - breath) * (if (goal > breath) 0.06f + 0.5f * sp else 0.02f + 0.45f * sp)
                 val now = System.currentTimeMillis()
 
                 // colour: read the cover once per song, then keep it fixed

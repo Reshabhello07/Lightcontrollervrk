@@ -61,6 +61,7 @@ fun App() {
     var spd by remember { mutableStateOf(1f) }
     var sens by remember { mutableStateOf(1f) }
     var smooth by remember { mutableStateOf(0.9f) }
+    var bs by remember { mutableStateOf(5f) }
     var useCover by remember { mutableStateOf(true) }
     var pending by remember { mutableStateOf("music") }
     var style by remember { mutableStateOf(0) }
@@ -104,8 +105,8 @@ fun App() {
         Text("Music (phone audio, no mic)", style = MaterialTheme.typography.titleMedium)
         Text("Sensitivity")
         Slider(value = sens, onValueChange = { sens = it }, valueRange = 0.3f..3f)
-        Text("Smoothness")
-        Slider(value = smooth, onValueChange = { smooth = it; Engine.decay = it }, valueRange = 0.75f..0.97f)
+        Text("Breathing speed: ${bs.roundToInt()}  (1 = slow, 10 = fast)")
+        Slider(value = bs, onValueChange = { bs = it; Engine.breathSpeed = it }, valueRange = 1f..10f, steps = 8)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = useCover, onCheckedChange = { useCover = it }); Spacer(Modifier.width(8.dp)); Text("Use album cover colors")
         }
