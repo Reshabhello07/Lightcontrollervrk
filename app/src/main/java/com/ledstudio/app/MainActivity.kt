@@ -111,10 +111,8 @@ fun App() {
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { go("music", 0) }) { Text("Breathing") }
-            Button(onClick = { go("music", 1) }) { Text("Spectrum") }
             Button(onClick = { go("music", 2) }) { Text("Smart tempo") }
             Button(onClick = { go("music", 3) }) { Text("Beat drop") }
-            Button(onClick = { stopAll(ctx); Engine.cover() }) { Text("Cover mesh") }
         }
         if (Engine.bpm.value > 0) Text("Tempo: ${Engine.bpm.value} BPM")
 
@@ -140,20 +138,9 @@ fun App() {
         HorizontalDivider()
         Text("Phone events", style = MaterialTheme.typography.titleMedium)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = Extras.callOn.value, onCheckedChange = { Extras.callOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Call ring (own color per contact)")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = Extras.battOn.value, onCheckedChange = { Extras.battOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Battery alerts")
         }
         Button(onClick = { Extras.showBattery(ctx) }) { Text("Show battery level") }
-
-        HorizontalDivider()
-        Text("Minecraft sync", style = MaterialTheme.typography.titleMedium)
-        Text(Extras.mcStatus.value)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { stopAll(ctx); Extras.mcStart() }) { Text("Start") }
-            OutlinedButton(onClick = { Extras.mcStop() }) { Text("Stop") }
-        }
 
         HorizontalDivider()
         Text("Built-in effects", style = MaterialTheme.typography.titleMedium)

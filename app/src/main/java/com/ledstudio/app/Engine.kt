@@ -32,19 +32,9 @@ val NOTIF_COLORS = mapOf(
 class CoverService : NotificationListenerService() {
     override fun onNotificationPosted(s: StatusBarNotification) {
         val n = s.notification
-        if (s.packageName == packageName) return
-        if (n.category == Notification.CATEGORY_CALL) {
-            val type = n.extras.getInt("android.callType", 0)   // 1 incoming, 2 ongoing
-            if (type == 1 || (type == 0 && !s.isOngoing)) Extras.ringStart(n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "?")
-            else Extras.ringStop()
-            return
-        }
         val media = n.category == Notification.CATEGORY_TRANSPORT || n.extras.containsKey(Notification.EXTRA_MEDIA_SESSION)
-        if (!Engine.notifOn.value || s.isOngoing || media) return
+        if (!Engine.notifOn.value || s.isOngoing || media || s.packageName == packageName) return
         Led.pulse(NOTIF_COLORS[s.packageName] ?: Color.WHITE)
-    }
-    override fun onNotificationRemoved(s: StatusBarNotification) {
-        if (s.notification.category == Notification.CATEGORY_CALL) Extras.ringStop()
     }
 }
 
@@ -62,18 +52,25 @@ object Cover {
         val h = FloatArray(3); Color.colorToHSV(c, h); h[1] = maxOf(h[1], 0.6f); h[2] = 1f
         return Color.HSVToColor(h)
     }
-    fun refresh(ctx: Context) {
+    /** Reads the current song's cover once. Returns true when a new song's colours were read. */
+    fun refresh(ctx: Context): Boolean {
         try {
             val msm = ctx.getSystemService(MediaSessionManager::class.java)
-            val md = msm.getActiveSessions(ComponentName(ctx, CoverService::class.java)).firstOrNull()?.metadata ?: return
+            val md = msm.getActiveSessions(ComponentName(ctx, CoverService::class.java)).firstOrNull()?.metadata ?: return false
             val k = md.getString(MediaMetadata.METADATA_KEY_TITLE) + md.getString(MediaMetadata.METADATA_KEY_ARTIST)
-            if (k == key) return
+            if (k == key) return false
             val bmp = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) ?: return
+                ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) ?: return false
             key = k
-            val sw = Palette.from(bmp).maximumColorCount(16).generate().swatches.sortedByDescending { it.population }.take(5)
-            if (sw.isNotEmpty()) cols = sw.map { boost(it.rgb) }
+            val all = Palette.from(bmp).maximumColorCount(24).generate().swatches
+            val total = all.sumOf { it.population }.coerceAtLeast(1)
+            val colorful = all.filter { it.hsl[1] >= 0.25f && it.hsl[2] in 0.12f..0.92f }.sortedByDescending { it.population }
+            val share = colorful.sumOf { it.population }.toFloat() / total
+            // black / white / grey covers -> plain white light
+            cols = if (colorful.isEmpty() || share < 0.25f) listOf(Color.WHITE) else colorful.take(5).map { boost(it.rgb) }
+            return true
         } catch (e: SecurityException) { }
+        return false
     }
 }
 
@@ -88,7 +85,7 @@ object Engine {
     val fx = mutableStateOf(1)
 
     fun init(c: Context) { app = c.applicationContext; Extras.initPhone(app) }
-    fun stop() { job?.cancel(); bpm.value = 0; Extras.mcStop() }
+    fun stop() { job?.cancel(); bpm.value = 0 }
     private fun run(block: suspend CoroutineScope.() -> Unit) { stop(); job = scope.launch(block = block) }
     private fun hsvC(h: Float, s: Float, v: Float) = Color.HSVToColor(floatArrayOf(h, s, v.coerceIn(0f, 1f)))
     private fun rot(c: Int, d: Float): Int { val h = FloatArray(3); Color.colorToHSV(c, h); h[0] = (h[0] + d) % 360f; return Color.HSVToColor(h) }
@@ -98,17 +95,6 @@ object Engine {
             val f = (s.fade / speed).toLong()
             Led.fadeTo(s.c, f, true)
             delay(maxOf(20L, f + (s.hold / speed).toLong()))
-        }
-    }
-
-    fun cover() = run {
-        var i = 0
-        while (isActive) {
-            Cover.refresh(app)
-            val cs = Cover.cols
-            val f = (4000 / speed).toLong()
-            Led.fadeTo(cs[i++ % cs.size], f, true)
-            delay(f)
         }
     }
 
@@ -166,21 +152,24 @@ object Engine {
         } finally { r.close() }
     }
 
-    // ---- Music from phone audio. style 0 breathing, 1 spectrum, 2 smart tempo ----
+    // ---- Music from phone audio. style 0 breathing, 2 smart tempo, 3 beat drop ----
+    // The cover colour is read once per song (about 2.5 s window); after that only brightness reacts to the beat.
     fun music(rec: AudioRecord, fixed: Int?, sens: Float, style: Int) = run {
         val buf = ShortArray(1024)
         var l1 = 0f; var l2 = 0f
-        val pk = floatArrayOf(.02f, .02f, .02f); val lv = FloatArray(3); val env = FloatArray(3)
-        var tick = 0; var ci = 0; var prev = 0f; var lastBeat = 0L; var decayK = decay
-        val ibi = ArrayList<Long>()
-        var phase = 0; var quietSince = 0L; var buildStart = 0L; var dropAt = 0L; var lastDrop = 0L
+        val pk = floatArrayOf(.02f, .02f, .02f); val lv = FloatArray(3)
+        val hist = FloatArray(43); var hi = 0
+        var pulse = 0f; var bassSm = 0f; var prevE = 0f; var lastBeat = 0L; var tick = 0
+        val ibi = ArrayList<Long>(); var bpmDecay = -1f
+        var ci = 0; var phase = 0; var quietSince = 0L; var buildStart = 0L; var dropAt = 0L; var lastDrop = 0L
         var pal = if (fixed == null) Cover.cols else listOf(fixed, rot(fixed, 120f), rot(fixed, 240f))
+        var target = pal[0]; var base = target
+        var learnUntil = System.currentTimeMillis() + 2500
         rec.startRecording()
         try {
             while (isActive) {
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) continue
-                if (style != 2) decayK = decay
                 var sb = 0f; var sm = 0f; var sh = 0f
                 for (i in 0 until n) {
                     val x = buf[i] / 32768f
@@ -192,50 +181,57 @@ object Engine {
                 for (k in 0..2) {
                     pk[k] = maxOf(pk[k] * 0.997f, e[k], 0.003f)
                     lv[k] = ((e[k] / pk[k]).pow(2f) * sens).coerceIn(0f, 1f)
-                    env[k] = if (lv[k] > env[k]) env[k] + (lv[k] - env[k]) * 0.6f else env[k] * decayK
                 }
-                if (fixed == null && tick++ % 40 == 0) { Cover.refresh(app); pal = Cover.cols }
+                bassSm = bassSm * 0.9f + lv[0] * 0.1f
                 val now = System.currentTimeMillis()
-                if (style == 2) {
-                    if (lv[0] > 0.55f && prev <= 0.55f && now - lastBeat > 280) {
-                        if (lastBeat > 0 && now - lastBeat < 1500) { ibi.add(now - lastBeat); if (ibi.size > 8) ibi.removeAt(0) }
-                        lastBeat = now; ci++
-                        if (ibi.size >= 3) {
-                            var b = 60000f / ibi.sorted()[ibi.size / 2]
-                            while (b < 70f) b *= 2; while (b > 180f) b /= 2
-                            bpm.value = b.toInt()
-                            decayK = 0.95f - 0.17f * ((b - 70f) / 110f).coerceIn(0f, 1f)
-                        }
-                    }
-                    prev = lv[0]
+
+                // colour: read the cover once per song, then keep it fixed
+                if (fixed == null && tick++ % (if (now < learnUntil) 10 else 40) == 0 && Cover.refresh(app)) {
+                    learnUntil = now + 2500; pal = Cover.cols; ci = 0; target = pal[0]
                 }
-                if (style == 3) {   // beat drop: quiet build-up -> blast -> new colour
+                base = ColorUtils.blendARGB(base, target, 0.05f)
+
+                // beat detection: bass energy against a ~1 s adaptive threshold (mean + spread), rising edge only
+                hist[hi++ % hist.size] = e[0]
+                var avg = 0f; for (x in hist) avg += x
+                avg /= hist.size
+                var vr = 0f; for (x in hist) vr += (x - avg) * (x - avg)
+                val sd = sqrt(vr / hist.size)
+                if (e[0] > avg * 1.3f + 0.5f * sd && e[0] > 0.008f / sens && e[0] > prevE && now - lastBeat > 260) {
+                    if (lastBeat > 0 && now - lastBeat < 1500) { ibi.add(now - lastBeat); if (ibi.size > 12) ibi.removeAt(0) }
+                    lastBeat = now; pulse = 1f
+                    if (ibi.size >= 4) {
+                        var b = 60000f / ibi.sorted()[ibi.size / 2]
+                        while (b < 70f) b *= 2f
+                        while (b > 180f) b /= 2f
+                        bpm.value = b.toInt()
+                        bpmDecay = 0.2f.pow(1f / (0.8f * (60f / b) / 0.0232f))   // fade to 20% in 0.8 beat
+                    }
+                }
+                prevE = e[0]
+                pulse *= if (style == 0 || bpmDecay < 0f) decay else bpmDecay
+
+                if (style == 3) {   // beat drop: quiet build-up -> white blast -> next cover colour
                     val air = lv[1] + lv[2]
-                    when (phase) {
-                        0 -> if (env[0] < 0.12f && air > 0.2f) {
-                                if (quietSince == 0L) quietSince = now
-                                if (now - quietSince > 1200 && now - lastDrop > 4000) { phase = 1; buildStart = now }
-                            } else quietSince = 0L
-                        1 -> if (lv[0] > 0.7f && now - buildStart > 600) { phase = 2; dropAt = now; lastDrop = now; ci++ }
-                             else if (now - buildStart > 20000) phase = 0
-                        2 -> if (now - dropAt > 180) { phase = 0; quietSince = 0L }
-                    }
+                    if (phase == 0) {
+                        if (bassSm < 0.12f && air > 0.2f) {
+                            if (quietSince == 0L) quietSince = now
+                            if (now - quietSince > 1200 && now - lastDrop > 4000) { phase = 1; buildStart = now }
+                        } else { quietSince = 0L }
+                    } else if (phase == 1) {
+                        if (lv[0] > 0.7f && now - buildStart > 600) {
+                            phase = 2; dropAt = now; lastDrop = now; ci++; target = pal[ci % pal.size]; pulse = 1f
+                        } else if (now - buildStart > 20000) { phase = 0 }
+                    } else if (now - dropAt > 180) { phase = 0; quietSince = 0L }
                 }
-                val out = when (style) {
-                    1 -> {
-                        var r = 0; var g = 0; var b = 0
-                        for (k in 0..2) { val c = pal[k % pal.size]; val a = env[k]; r += (Color.red(c) * a).toInt(); g += (Color.green(c) * a).toInt(); b += (Color.blue(c) * a).toInt() }
-                        Color.rgb(maxOf(r, 8).coerceAtMost(255), maxOf(g, 8).coerceAtMost(255), maxOf(b, 8).coerceAtMost(255))
-                    }
-                    2 -> ColorUtils.blendARGB(Color.BLACK, pal[ci % pal.size], 0.05f + 0.95f * env[0])
-                    3 -> when (phase) {
-                        1 -> ColorUtils.blendARGB(Color.BLACK, pal[(ci + 1) % pal.size], 0.02f + 0.2f * lv[2])
-                        2 -> Color.WHITE
-                        else -> ColorUtils.blendARGB(Color.BLACK, pal[ci % pal.size], 0.05f + 0.95f * env[0])
-                    }
-                    else -> ColorUtils.blendARGB(Color.BLACK, pal[0], 0.05f + 0.95f * env[0])
+
+                val level = maxOf(pulse, 0.25f * lv[0])
+                val out = when {
+                    style == 3 && phase == 1 -> ColorUtils.blendARGB(Color.BLACK, base, 0.02f + 0.2f * lv[2])
+                    style == 3 && phase == 2 -> Color.WHITE
+                    else -> ColorUtils.blendARGB(Color.BLACK, base, 0.05f + 0.95f * level)
                 }
-                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; style == 2 -> 50L; else -> 70L })
+                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; else -> 45L })
             }
         } finally { rec.release() }
     }
