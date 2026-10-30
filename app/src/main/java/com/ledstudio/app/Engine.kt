@@ -159,6 +159,7 @@ object Engine {
         var l1 = 0f; var l2 = 0f
         val pk = floatArrayOf(.02f, .02f, .02f); val lv = FloatArray(3)
         val hist = FloatArray(43); var hi = 0
+        var breath = 0.12f; var lo = 0f; var hiV = 0f; var inited = false
         var pulse = 0f; var bassSm = 0f; var prevE = 0f; var lastBeat = 0L; var tick = 0
         val ibi = ArrayList<Long>(); var bpmDecay = -1f
         var ci = 0; var phase = 0; var quietSince = 0L; var buildStart = 0L; var dropAt = 0L; var lastDrop = 0L
@@ -183,6 +184,15 @@ object Engine {
                     lv[k] = ((e[k] / pk[k]).pow(2f) * sens).coerceIn(0f, 1f)
                 }
                 bassSm = bassSm * 0.9f + lv[0] * 0.1f
+
+                // comfortable breathing: follow the song's loudness against its own recent quiet/loud range
+                val ld = kotlin.math.ln(0.75f * e[0] + 0.25f * e[1] + 1e-4f)
+                if (!inited) { lo = ld - 1f; hiV = ld + 1f; inited = true }
+                lo = if (ld < lo) lo + (ld - lo) * 0.05f else lo + 0.0004f
+                hiV = if (ld > hiV) hiV + (ld - hiV) * 0.05f else hiV - 0.0006f
+                val nrm = ((ld - lo) / (hiV - lo).coerceAtLeast(1.2f)).coerceIn(0f, 1f)
+                val goal = 0.12f + 0.75f * nrm.pow(1.3f)
+                breath += (goal - breath) * (if (goal > breath) 0.15f else (1f - decay) * 0.6f)
                 val now = System.currentTimeMillis()
 
                 // colour: read the cover once per song, then keep it fixed
@@ -199,7 +209,7 @@ object Engine {
                 val sd = sqrt(vr / hist.size)
                 if (e[0] > avg * 1.3f + 0.5f * sd && e[0] > 0.008f / sens && e[0] > prevE && now - lastBeat > 260) {
                     if (lastBeat > 0 && now - lastBeat < 1500) { ibi.add(now - lastBeat); if (ibi.size > 12) ibi.removeAt(0) }
-                    lastBeat = now; pulse = 1f
+                    lastBeat = now; if (e[0] > avg * 1.6f + sd) pulse = 0.6f
                     if (ibi.size >= 4) {
                         var b = 60000f / ibi.sorted()[ibi.size / 2]
                         while (b < 70f) b *= 2f
@@ -209,7 +219,7 @@ object Engine {
                     }
                 }
                 prevE = e[0]
-                pulse *= if (style == 0 || bpmDecay < 0f) decay else bpmDecay
+                pulse *= if (bpmDecay < 0f) 0.9f else bpmDecay
 
                 if (style == 3) {   // beat drop: quiet build-up -> white blast -> next cover colour
                     val air = lv[1] + lv[2]
@@ -225,13 +235,13 @@ object Engine {
                     } else if (now - dropAt > 180) { phase = 0; quietSince = 0L }
                 }
 
-                val level = maxOf(pulse, 0.25f * lv[0])
+                val level = if (style == 0) breath else (breath + 0.2f * pulse).coerceAtMost(0.95f)
                 val out = when {
                     style == 3 && phase == 1 -> ColorUtils.blendARGB(Color.BLACK, base, 0.02f + 0.2f * lv[2])
                     style == 3 && phase == 2 -> Color.WHITE
-                    else -> ColorUtils.blendARGB(Color.BLACK, base, 0.05f + 0.95f * level)
+                    else -> ColorUtils.blendARGB(Color.BLACK, base, level)
                 }
-                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; else -> 45L })
+                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; else -> 80L })
             }
         } finally { rec.release() }
     }
