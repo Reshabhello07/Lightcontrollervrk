@@ -89,8 +89,33 @@ object Led {
         gatt = null; chr = null; busy = false
     }
 
+    @Volatile private var gen = 0   // invalidates a pending disconnect when connect() is called again
+
+    /** Turns the strip off, stops auto-reconnect and drops the Bluetooth link. */
+    fun disconnect() {
+        val g = ++gen
+        wasUp = false; connecting = false
+        try {
+            val sc = (appCtx?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter?.bluetoothLeScanner
+            scanCb?.let { sc?.stopScan(it) }
+        } catch (e: Exception) { }
+        scanCb = null
+        fadeTo(Color.BLACK, 120, false, true)
+        main.postDelayed({
+            if (g != gen) return@postDelayed
+            write(Color.BLACK)
+            main.postDelayed({
+                if (g != gen) return@postDelayed
+                closeGatt(); lastSent = -1
+                appCtx?.let { try { it.stopService(Intent(it, KeepAliveService::class.java)) } catch (e: Exception) { } }
+                status.value = "Disconnected (off)"
+            }, 120)
+        }, 300)
+    }
+
     fun connect(ctx: Context) {
         val app = ctx.applicationContext
+        gen++
         appCtx = app
         try {
             val adapter = (app.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter

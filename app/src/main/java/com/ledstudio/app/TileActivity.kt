@@ -15,7 +15,7 @@ class TileActivity : ComponentActivity() {
         if (r.resultCode == Activity.RESULT_OK && r.data != null) {
             startForegroundService(Intent(this, LedService::class.java)
                 .putExtra("code", r.resultCode).putExtra("data", r.data)
-                .putExtra("mode", "music").putExtra("style", intent.getIntExtra("style", 0)).putExtra("cover", true)
+                .putExtra("mode", "music").putExtra("style", intent.getIntExtra("style", 2)).putExtra("cover", true)
                 .putExtra("color", Led.hsv(0f)).putExtra("sens", 1f))
         }
         finish()

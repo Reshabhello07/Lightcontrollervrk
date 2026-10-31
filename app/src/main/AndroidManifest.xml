@@ -12,7 +12,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
-    <application android:label="LED Studio" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+    <application android:label="LED Studio" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -23,10 +23,6 @@
         <service android:name=".KeepAliveService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
         <service android:name=".SmartTempoTileService" android:exported="true" android:label="LED Smart Tempo"
             android:icon="@drawable/ic_tile_tempo" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
-        </service>
-        <service android:name=".LedTileService" android:exported="true" android:label="LED Breathing"
-            android:icon="@drawable/ic_tile" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
         </service>
         <activity android:name=".TileActivity" android:exported="false" android:excludeFromRecents="true"
