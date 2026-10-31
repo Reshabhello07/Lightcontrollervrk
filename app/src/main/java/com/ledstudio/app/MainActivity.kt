@@ -61,6 +61,7 @@ fun App() {
     var spd by remember { mutableStateOf(1f) }
     var sens by remember { mutableStateOf(1f) }
     var smooth by remember { mutableStateOf(0.9f) }
+    var bs by remember { mutableStateOf(5f) }
     var useCover by remember { mutableStateOf(true) }
     var pending by remember { mutableStateOf("music") }
     var style by remember { mutableStateOf(0) }
@@ -104,17 +105,15 @@ fun App() {
         Text("Music (phone audio, no mic)", style = MaterialTheme.typography.titleMedium)
         Text("Sensitivity")
         Slider(value = sens, onValueChange = { sens = it }, valueRange = 0.3f..3f)
-        Text("Smoothness")
-        Slider(value = smooth, onValueChange = { smooth = it; Engine.decay = it }, valueRange = 0.75f..0.97f)
+        Text("Breathing speed: ${bs.roundToInt()}  (1 = slow, 10 = fast)")
+        Slider(value = bs, onValueChange = { bs = it; Engine.breathSpeed = it }, valueRange = 1f..10f, steps = 8)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = useCover, onCheckedChange = { useCover = it }); Spacer(Modifier.width(8.dp)); Text("Use album cover colors")
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { go("music", 0) }) { Text("Breathing") }
-            Button(onClick = { go("music", 1) }) { Text("Spectrum") }
             Button(onClick = { go("music", 2) }) { Text("Smart tempo") }
             Button(onClick = { go("music", 3) }) { Text("Beat drop") }
-            Button(onClick = { stopAll(ctx); Engine.cover() }) { Text("Cover mesh") }
         }
         if (Engine.bpm.value > 0) Text("Tempo: ${Engine.bpm.value} BPM")
 
@@ -140,20 +139,9 @@ fun App() {
         HorizontalDivider()
         Text("Phone events", style = MaterialTheme.typography.titleMedium)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = Extras.callOn.value, onCheckedChange = { Extras.callOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Call ring (own color per contact)")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = Extras.battOn.value, onCheckedChange = { Extras.battOn.value = it }); Spacer(Modifier.width(8.dp)); Text("Battery alerts")
         }
         Button(onClick = { Extras.showBattery(ctx) }) { Text("Show battery level") }
-
-        HorizontalDivider()
-        Text("Minecraft sync", style = MaterialTheme.typography.titleMedium)
-        Text(Extras.mcStatus.value)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { stopAll(ctx); Extras.mcStart() }) { Text("Start") }
-            OutlinedButton(onClick = { Extras.mcStop() }) { Text("Stop") }
-        }
 
         HorizontalDivider()
         Text("Built-in effects", style = MaterialTheme.typography.titleMedium)
