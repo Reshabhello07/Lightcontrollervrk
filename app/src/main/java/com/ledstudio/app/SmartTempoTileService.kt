@@ -21,10 +21,18 @@ class SmartTempoTileService : TileService() {
             refresh(false)
             return
         }
+        openHelper()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun openHelper() {
         val i = Intent(this, TileActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("style", 2)
-        if (Build.VERSION.SDK_INT >= 34)
-            startActivityAndCollapse(PendingIntent.getActivity(this, 2, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        else @Suppress("DEPRECATION") startActivityAndCollapse(i)
+        if (Build.VERSION.SDK_INT >= 34) {
+            val pi = PendingIntent.getActivity(this, 2, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            startActivityAndCollapse(pi)
+        } else {
+            startActivityAndCollapse(i)
+        }
     }
 
     private fun isOn() = LedService.running && LedService.style == 2

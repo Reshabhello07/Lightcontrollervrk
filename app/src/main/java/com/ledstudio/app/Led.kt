@@ -101,16 +101,16 @@ object Led {
         } catch (e: Exception) { }
         scanCb = null
         fadeTo(Color.BLACK, 120, false, true)
-        main.postDelayed({
-            if (g != gen) return@postDelayed
+        CoroutineScope(Dispatchers.Default).launch {
+            delay(300)
+            if (g != gen) return@launch
             write(Color.BLACK)
-            main.postDelayed({
-                if (g != gen) return@postDelayed
-                closeGatt(); lastSent = -1
-                appCtx?.let { try { it.stopService(Intent(it, KeepAliveService::class.java)) } catch (e: Exception) { } }
-                status.value = "Disconnected (off)"
-            }, 120)
-        }, 300)
+            delay(120)
+            if (g != gen) return@launch
+            closeGatt(); lastSent = -1
+            appCtx?.let { try { it.stopService(Intent(it, KeepAliveService::class.java)) } catch (e: Exception) { } }
+            status.value = "Disconnected (off)"
+        }
     }
 
     fun connect(ctx: Context) {
