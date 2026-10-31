@@ -15,6 +15,7 @@ import android.os.IBinder
 
 @Suppress("DEPRECATION")
 class LedService : Service() {
+    companion object { @Volatile var running = false; @Volatile var style = -1 }
     private var mp: MediaProjection? = null
     private var vd: VirtualDisplay? = null
     override fun onBind(i: Intent?): IBinder? = null
@@ -30,6 +31,7 @@ class LedService : Service() {
         val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(i.getIntExtra("code", 0), data)
         p.registerCallback(object : MediaProjection.Callback() {}, null)
         mp = p
+        running = true; style = if (i.getStringExtra("mode") == "screen") -1 else i.getIntExtra("style", 0); Tiles.poke(applicationContext)
         if (i.getStringExtra("mode") == "screen") {
             val dm = resources.displayMetrics
             val w = dm.widthPixels / 10; val h = dm.heightPixels / 10
@@ -49,5 +51,5 @@ class LedService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onDestroy() { Engine.stop(); vd?.release(); mp?.stop(); super.onDestroy() }
+    override fun onDestroy() { running = false; style = -1; Engine.stop(); vd?.release(); mp?.stop(); Tiles.poke(applicationContext); super.onDestroy() }
 }
