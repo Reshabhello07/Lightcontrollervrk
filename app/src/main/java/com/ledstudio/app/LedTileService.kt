@@ -16,7 +16,7 @@ class SmartTempoTileService : TileService() {
 
     override fun onClick() {
         if (isOn()) {
-            stopAll(applicationContext)
+            stopAll(applicationContext, afterglow = false)
             Led.disconnect()
             refresh(false)
             return

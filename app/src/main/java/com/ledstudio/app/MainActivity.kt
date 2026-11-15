@@ -66,4 +66,4 @@ fun saveFavs(c: Context, m: Map<Int, String>) {
     c.getSharedPreferences("fx", 0).edit().putString("f", o.toString()).apply()
 }
 
-fun stopAll(ctx: Context) { Engine.stop(); ctx.stopService(Intent(ctx, LedService::class.java)) }
+fun stopAll(ctx: Context, afterglow: Boolean = true) { Engine.stop(afterglow); ctx.stopService(Intent(ctx, LedService::class.java)) }

@@ -11,6 +11,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
@@ -19,9 +20,12 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class Step(val c: Int, val hold: Int, val fade: Int)
 data class Effect(val name: String, val steps: List<Step>)
+data class VibeFrame(val color: Int, val beat: Boolean)
 
 val NOTIF_COLORS = mapOf(
     "com.whatsapp" to 0xFF25D366.toInt(), "com.whatsapp.w4b" to 0xFF25D366.toInt(),
@@ -105,14 +109,104 @@ object Engine {
     val notifOn = mutableStateOf(true)
     val bpm = mutableStateOf(0)
     val fx = mutableStateOf(1)
+    val vibeRecording = mutableStateOf(false)
+    val vibeHasSaved = mutableStateOf(false)
+    val vibeSampleCount = mutableStateOf(0)
+    val glitchFreeze = mutableStateOf(false)
+    private val capturedVibe = mutableListOf<VibeFrame>()
+    private val savedVibe = mutableStateListOf<VibeFrame>()
+    private val musicMemory = mutableListOf<Int>()
+    private var vibeLoaded = false
+    @Volatile private var activeMode = ""
+    private var afterglowJob: Job? = null
 
-    fun init(c: Context) { app = c.applicationContext; Extras.initPhone(app) }
-    fun stop() { job?.cancel(); bpm.value = 0; Extras.mcStop() }
-    private fun run(block: suspend CoroutineScope.() -> Unit) { stop(); job = scope.launch(block = block) }
+    fun init(c: Context) {
+        app = c.applicationContext
+        Extras.initPhone(app)
+        if (!vibeLoaded) {
+            vibeLoaded = true
+            try {
+                val json = JSONArray(app.getSharedPreferences("vibe", 0).getString("frames", "[]") ?: "[]")
+                for (i in 0 until json.length()) {
+                    val frame = json.getJSONObject(i)
+                    savedVibe.add(VibeFrame(frame.getInt("color"), frame.optBoolean("beat")))
+                }
+                vibeHasSaved.value = savedVibe.isNotEmpty()
+                vibeSampleCount.value = savedVibe.size
+            } catch (_: Exception) { savedVibe.clear() }
+        }
+    }
+
+    fun startVibeCapture() {
+        synchronized(capturedVibe) { capturedVibe.clear() }
+        vibeSampleCount.value = 0
+        vibeRecording.value = true
+    }
+
+    fun finishVibeCapture() {
+        vibeRecording.value = false
+        val frames = synchronized(capturedVibe) { capturedVibe.toList() }
+        if (frames.isEmpty()) return
+        savedVibe.clear(); savedVibe.addAll(frames)
+        vibeSampleCount.value = frames.size
+        vibeHasSaved.value = true
+        val json = JSONArray()
+        frames.forEach { json.put(JSONObject().put("color", it.color).put("beat", it.beat)) }
+        if (vibeLoaded) app.getSharedPreferences("vibe", 0).edit().putString("frames", json.toString()).apply()
+    }
+
+    fun playVibe() {
+        val frames = savedVibe.toList()
+        if (frames.isEmpty()) return
+        run("vibe") {
+            for (frame in frames) {
+                if (!isActive) break
+                Led.fadeTo(frame.color, if (frame.beat) 24 else 110, smooth = !frame.beat, force = true)
+                delay(if (frame.beat) 95 else 120)
+            }
+            Led.fadeTo(Color.BLACK, 1800, smooth = true, force = true)
+        }
+    }
+
+    fun stop(afterglow: Boolean = true) {
+        val previousMode = activeMode
+        activeMode = ""
+        if (previousMode == "music" && vibeRecording.value) finishVibeCapture()
+        job?.cancel(); job = null
+        bpm.value = 0
+        Extras.mcStop()
+        if (!afterglow) afterglowJob?.cancel()
+        else if (previousMode == "music" && afterglowJob?.isActive != true) startAfterglow()
+    }
+
+    private fun startAfterglow() {
+        if (afterglowJob?.isActive == true) return
+        val colors = synchronized(musicMemory) { musicMemory.toList() }.ifEmpty { listOf(Led.cur) }
+        afterglowJob = scope.launch {
+            val started = System.currentTimeMillis()
+            while (isActive) {
+                val elapsed = System.currentTimeMillis() - started
+                if (elapsed >= 60_000L) break
+                val progress = elapsed / 60_000f
+                val color = colors[((elapsed / 3200L) % colors.size).toInt()]
+                val strength = (1f - progress).coerceIn(0f, 1f).pow(1.5f)
+                Led.fadeTo(ColorUtils.blendARGB(Color.BLACK, color, strength), 1500, smooth = true, force = true)
+                delay(1200)
+            }
+            Led.fadeTo(Color.BLACK, 4000, smooth = true, force = true)
+        }
+    }
+
+    private fun run(mode: String, block: suspend CoroutineScope.() -> Unit) {
+        stop(afterglow = false)
+        activeMode = mode
+        job = scope.launch(block = block)
+    }
+
     private fun hsvC(h: Float, s: Float, v: Float) = Color.HSVToColor(floatArrayOf(h, s, v.coerceIn(0f, 1f)))
     private fun rot(c: Int, d: Float): Int { val h = FloatArray(3); Color.colorToHSV(c, h); h[0] = (h[0] + d) % 360f; return Color.HSVToColor(h) }
 
-    fun play(e: Effect) = run {
+    fun play(e: Effect) = run("preset") {
         while (isActive) for (s in e.steps) {
             val f = (s.fade / speed).toLong()
             Led.fadeTo(s.c, f, true)
@@ -120,7 +214,7 @@ object Engine {
         }
     }
 
-    fun cover() = run {
+    fun cover() = run("cover") {
         var i = 0
         while (isActive) {
             Cover.refresh(app)
@@ -131,13 +225,13 @@ object Engine {
         }
     }
 
-    fun cycle(from: Int, to: Int, sec: Int) = run {
+    fun cycle(from: Int, to: Int, sec: Int) = run("cycle") {
         var i = from
         while (isActive) { fx.value = i; Led.effect(i); delay(sec * 1000L); i = if (i >= to) from else i + 1 }
     }
 
     // ---- Cinematic scenes ----
-    private fun scene(f: (Float) -> Int) = run {
+    private fun scene(f: (Float) -> Int) = run("scene") {
         val t0 = System.nanoTime()
         while (isActive) { Led.fadeTo(f((System.nanoTime() - t0) / 1e9f), 70); delay(40) }
     }
@@ -160,7 +254,7 @@ object Engine {
     }
 
     // ---- Screen sync: weighted average of colourful pixels ----
-    fun screen(r: ImageReader) = run {
+    fun screen(r: ImageReader) = run("screen") {
         try {
             while (isActive) {
                 val img = r.acquireLatestImage()
@@ -186,7 +280,7 @@ object Engine {
     }
 
     // ---- Music from phone audio. style 0 breathing, 1 spectrum, 2 smart tempo ----
-    fun music(rec: AudioRecord, fixed: Int?, sens: Float, style: Int) = run {
+    fun music(rec: AudioRecord, fixed: Int?, sens: Float, style: Int) = run("music") {
         val buf = ShortArray(1024)
         var l1 = 0f; var l2 = 0f
         val pk = floatArrayOf(.02f, .02f, .02f); val lv = FloatArray(3); val env = FloatArray(3)
@@ -197,6 +291,10 @@ object Engine {
         // breathing (style 0): same logic as the original LedStudio breathing
         val hist = FloatArray(43); var hi = 0; var prevE = 0f; var bLast = 0L; val bIbi = ArrayList<Long>()
         var breath = 0.12f; var lo = 0f; var hiV = 0f; var inited = false; var base = pal[0]
+        synchronized(musicMemory) { musicMemory.clear() }
+        var lastMemoryAt = 0L; var lastVibeAt = 0L; var lastAudibleAt = System.currentTimeMillis()
+        var silentAfterglow = false; var glitchPrevious = 0f; var lastGlitchBeat = 0L
+        var freezeUntil = 0L; var burstUntil = 0L; var burstColor = Color.WHITE
         rec.startRecording()
         try {
             while (isActive) {
@@ -218,6 +316,44 @@ object Engine {
                 }
                 if (fixed == null && tick++ % 40 == 0) { Cover.refresh(app); pal = Cover.cols }
                 val now = System.currentTimeMillis()
+                val audible = (e.maxOrNull() ?: 0f) > 0.0035f
+                if (audible) {
+                    lastAudibleAt = now
+                    if (silentAfterglow) { afterglowJob?.cancel(); silentAfterglow = false }
+                    if (now - lastMemoryAt >= 850) {
+                        lastMemoryAt = now
+                        val color = Led.cur
+                        synchronized(musicMemory) {
+                            val last = musicMemory.lastOrNull()
+                            val distance = if (last == null) 255 else kotlin.math.abs(Color.red(color) - Color.red(last)) + kotlin.math.abs(Color.green(color) - Color.green(last)) + kotlin.math.abs(Color.blue(color) - Color.blue(last))
+                            if (last == null || distance > 70) { musicMemory.add(color); if (musicMemory.size > 18) musicMemory.removeAt(0) }
+                        }
+                    }
+                } else if (!silentAfterglow && musicMemory.isNotEmpty() && now - lastAudibleAt > 2500) {
+                    silentAfterglow = true
+                    startAfterglow()
+                }
+                val beatHit = lv[0] > 0.55f && glitchPrevious <= 0.55f && now - lastGlitchBeat > 280
+                glitchPrevious = lv[0]
+                if (beatHit) {
+                    lastGlitchBeat = now
+                    if (glitchFreeze.value) {
+                        val frozen = Led.cur
+                        burstColor = ColorUtils.blendARGB(frozen, Color.WHITE, 0.78f)
+                        freezeUntil = now + 75
+                        burstUntil = now + 145
+                        Led.fadeTo(frozen, 75, smooth = true, force = true)
+                    }
+                }
+                if (vibeRecording.value && audible && now - lastVibeAt >= 120) {
+                    lastVibeAt = now
+                    val count = synchronized(capturedVibe) {
+                        if (capturedVibe.size < 300) capturedVibe.add(VibeFrame(Led.cur, beatHit))
+                        capturedVibe.size
+                    }
+                    if (count % 5 == 0 || count >= 300) vibeSampleCount.value = count
+                    if (count >= 300) finishVibeCapture()
+                }
                 if (style == 0) {
                     // comfortable breathing: follow the song's loudness against its own recent quiet/loud range
                     val ld = kotlin.math.ln(0.75f * e[0] + 0.25f * e[1] + 1e-4f)
@@ -286,7 +422,13 @@ object Engine {
                     }
                     else -> ColorUtils.blendARGB(Color.BLACK, base, breath)
                 }
-                Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; style == 2 -> 50L; else -> 70L })
+                if (!silentAfterglow) {
+                    when {
+                        now < freezeUntil -> Unit
+                        now < burstUntil -> Led.fadeTo(burstColor, 24, force = true)
+                        else -> Led.fadeTo(out, when { style == 3 && phase == 1 -> 250L; style == 3 && phase == 2 -> 20L; style == 2 -> 50L; else -> 70L })
+                    }
+                }
             }
         } finally { rec.release() }
     }

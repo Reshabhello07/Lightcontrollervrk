@@ -13,6 +13,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -27,6 +29,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -36,10 +45,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.max
+import kotlin.math.atan2
+import kotlin.math.PI
 import kotlin.math.roundToInt
 
 /** All UI state that the tabs share. */
@@ -56,7 +68,7 @@ class Ctl(ctx: Context) {
     var style = 0
     val favs = mutableStateMapOf<Int, String>().apply { putAll(loadFavs(ctx)) }
     var go: (String, Int) -> Unit = { _, _ -> }
-    fun playFx(ctx: Context, id: Int) { stopAll(ctx); active = ""; Engine.fx.value = id; Led.effect(id) }
+    fun playFx(ctx: Context, id: Int) { stopAll(ctx, afterglow = false); active = ""; Engine.fx.value = id; Led.effect(id) }
 }
 
 @Composable
@@ -64,6 +76,19 @@ fun App() {
     val ctx = LocalContext.current
     val c = remember { Ctl(ctx) }
     var tab by remember { mutableStateOf(0) }
+    var previousTab by remember { mutableIntStateOf(tab) }
+    val morph = remember { Animatable(1f) }
+    var pageOrigin by remember { mutableStateOf(Offset.Zero) }
+    var pageSize by remember { mutableStateOf(IntSize.Zero) }
+    var navOrigin by remember { mutableStateOf(Offset.Zero) }
+    var navSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(tab) {
+        if (previousTab != tab) {
+            previousTab = tab
+            morph.snapTo(0f)
+            morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+        }
+    }
 
     // glass accent follows the colour the strip is showing
     var live by remember { mutableStateOf(Color(0xFF8B7BFF)) }
@@ -101,7 +126,7 @@ fun App() {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f)) {
+                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }) {
                     Crossfade(tab, animationSpec = tween(durationMillis = 180), label = "tab") { t ->
                         when (t) {
                             0 -> MusicTab(c)
@@ -111,7 +136,36 @@ fun App() {
                         }
                     }
                 }
-                GlassTabBar(tab, { tab = it }, Modifier.navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp))
+                GlassTabBar(tab, { tab = it }, Modifier.navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp).onGloballyPositioned { navOrigin = it.positionInRoot(); navSize = it.size })
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                val progress = morph.value
+                if (progress < 1f && navSize.width > 0 && pageSize.height > 0) {
+                    val itemWidth = navSize.width / 4f
+                    val start = Offset(navOrigin.x + itemWidth * (tab + 0.5f), navOrigin.y + 5.dp.toPx())
+                    val end = Offset(pageOrigin.x + 30.dp.toPx(), pageOrigin.y + 24.dp.toPx())
+                    val lift = (start.y - end.y).coerceAtLeast(1f)
+                    val c1 = Offset(start.x, start.y - lift * 0.42f)
+                    val c2 = Offset(end.x, end.y + lift * 0.32f)
+                    fun point(t: Float): Offset {
+                        val u = 1f - t
+                        return Offset(
+                            u * u * u * start.x + 3f * u * u * t * c1.x + 3f * u * t * t * c2.x + t * t * t * end.x,
+                            u * u * u * start.y + 3f * u * u * t * c1.y + 3f * u * t * t * c2.y + t * t * t * end.y
+                        )
+                    }
+                    val path = Path()
+                    val segments = (28 * progress).toInt().coerceAtLeast(1)
+                    for (i in 0..segments) {
+                        val p = point(progress * i / segments)
+                        if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                    }
+                    val alpha = (1f - progress).coerceIn(0f, 1f)
+                    drawPath(path, Brush.linearGradient(listOf(accent.copy(alpha = 0f), Color.White.copy(alpha = alpha), accent.copy(alpha = alpha)), start = start, end = end), style = Stroke(width = 3.dp.toPx()))
+                    val bead = point(progress)
+                    drawCircle(accent.copy(alpha = alpha * 0.24f), radius = 20.dp.toPx(), center = bead)
+                    drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = alpha), accent.copy(alpha = alpha * 0.75f), Color.Transparent), center = bead, radius = 11.dp.toPx()), radius = 11.dp.toPx(), center = bead)
+                }
             }
         }
     }
@@ -134,7 +188,7 @@ private fun Header(c: Ctl, onConnect: () -> Unit) {
             }
             GlassButton("Connect", primary = true, onClick = onConnect)
             Spacer(Modifier.width(8.dp))
-            GlassButton("Off") { stopAll(ctx); c.active = ""; Led.fadeTo(android.graphics.Color.BLACK, 400, true) }
+            GlassButton("Off") { stopAll(ctx, afterglow = false); c.active = ""; Led.fadeTo(android.graphics.Color.BLACK, 400, true) }
         }
         SliderRow("Brightness", "${(Led.bright.value * 100).roundToInt()}%", Led.bright.value * 100f, 5f..Led.MAX_PCT.toFloat(),
             onChange = { Led.bright.value = it.roundToInt() / 100f }, step = 1f)
@@ -171,6 +225,25 @@ private fun MusicTab(c: Ctl) {
                 onChange = { c.smooth = it; Engine.decay = it })
             SwitchRow("Use album cover colors", c.useCover) { c.useCover = it }
         }
+        GlassCard {
+            Label("Make this vibe")
+            Body("Capture the colors and beat accents of a short moment, then replay it later.", 0.68f)
+            if (!c.active.startsWith("m")) Body("Start a music mode above before recording.", 0.55f)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassButton(if (Engine.vibeRecording.value) "Stop + save" else "Capture vibe", primary = Engine.vibeRecording.value) {
+                    if (Engine.vibeRecording.value) Engine.finishVibeCapture()
+                    else if (c.active.startsWith("m")) Engine.startVibeCapture()
+                }
+                if (Engine.vibeHasSaved.value) GlassButton("Replay vibe") { stopAll(ctx, afterglow = false); c.active = ""; Engine.playVibe() }
+            }
+            if (Engine.vibeRecording.value) Body("Recording · ${Engine.vibeSampleCount.value} moments", 0.75f)
+            else if (Engine.vibeHasSaved.value) Body("${Engine.vibeSampleCount.value} saved moments · recording auto-stops after about 36 seconds", 0.55f)
+            GlassButton(if (Engine.glitchFreeze.value) "Glitch-freeze · armed" else "Glitch-freeze") {
+                Engine.glitchFreeze.value = !Engine.glitchFreeze.value
+            }
+            Body("When armed, each detected beat briefly freezes the color, then snaps into a bright flash.", 0.55f)
+            Body("When music pauses, Afterglow slowly dissolves its recent colors over a minute.", 0.55f)
+        }
     }
 }
 
@@ -178,10 +251,21 @@ private fun MusicTab(c: Ctl) {
 private fun ScenesTab(c: Ctl) {
     val ctx = LocalContext.current
     TabColumn {
+        GlassCard(strong = true) {
+            Label("Color Reactor")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("${c.hue.roundToInt()}°", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Body("Drag the outer ring to turn the color. Pull from the center to raise or lower brightness.", 0.65f)
+                    Body("Flick to send a glassy ripple.", 0.5f)
+                }
+                ColorReactor(c, Modifier.size(176.dp))
+            }
+        }
         GlassCard {
             Label("Color")
             SliderRow("Hue", "${c.hue.roundToInt()}°", c.hue, 0f..360f, rainbow = true,
-                onChange = { c.hue = it; stopAll(ctx); c.active = ""; Led.fadeTo(Led.hsv(it), 120) })
+                onChange = { c.hue = it; Led.fadeTo(Led.hsv(it), 60) }, onFinish = { stopAll(ctx, afterglow = false); c.active = ""; Led.fadeTo(Led.hsv(c.hue), 120) })
             SliderRow("Effect speed", "%.2f×".format(c.spd), c.spd, 0.25f..4f, onChange = { c.spd = it; Engine.speed = it })
         }
         GlassCard {
@@ -254,7 +338,7 @@ private fun SyncTab(c: Ctl) {
             Label("Minecraft sync")
             Body(Extras.mcStatus.value, 0.7f)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Start", primary = true) { stopAll(ctx); c.active = ""; Extras.mcStart() }
+                GlassButton("Start", primary = true) { stopAll(ctx, afterglow = false); c.active = ""; Extras.mcStart() }
                 GlassButton("Stop") { Extras.mcStop() }
             }
         }
@@ -270,7 +354,7 @@ private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
             Body(Led.status.value, 0.85f)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GlassButton("Connect", primary = true, onClick = onConnect)
-                GlassButton("Disconnect") { stopAll(ctx); c.active = ""; Led.disconnect() }
+                GlassButton("Disconnect") { stopAll(ctx, afterglow = false); c.active = ""; Led.disconnect() }
             }
         }
         GlassCard {
@@ -302,4 +386,53 @@ private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) 
             }
         }
     )
+}
+
+@Composable
+private fun ColorReactor(c: Ctl, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val ripple = remember { Animatable(1f) }
+    Box(modifier.pointerInput(c) {
+        var brightnessGesture = false
+        detectDragGestures(
+            onDragStart = { down ->
+                val center = Offset(size.width / 2f, size.height / 2f)
+                brightnessGesture = (down - center).getDistance() < minOf(size.width, size.height) * 0.24f
+                stopAll(ctx, afterglow = false)
+                c.active = ""
+            },
+            onDragEnd = {
+                scope.launch { ripple.snapTo(0f); ripple.animateTo(1f, tween(520)) }
+            }
+        ) { change, _ ->
+            change.consume()
+            if (brightnessGesture) {
+                Led.bright.value = (1f - change.position.y / size.height).coerceIn(0.05f, 1f)
+            } else {
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val angle = atan2(change.position.y - center.y, change.position.x - center.x) * 180f / PI.toFloat()
+                c.hue = (angle + 360f) % 360f
+                Led.fadeTo(Led.hsv(c.hue), 45, force = true)
+            }
+        }
+    }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.minDimension
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val selected = Color(Led.hsv(c.hue))
+            val wheel = listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
+            drawCircle(Brush.sweepGradient(wheel, center), radius = s * 0.45f, center = center, style = Stroke(width = 13.dp.toPx()))
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.92f), selected, Color.Black.copy(alpha = 0.78f)), center = center, radius = s * 0.35f),
+                radius = s * 0.34f,
+                center = center
+            )
+            if (ripple.value < 1f) {
+                drawCircle(selected.copy(alpha = 1f - ripple.value), radius = s * (0.26f + 0.16f * ripple.value), center = center, style = Stroke(width = 2.dp.toPx()))
+            }
+            drawCircle(Color.White.copy(alpha = 0.52f), radius = s * 0.045f, center = Offset(center.x - s * 0.12f, center.y - s * 0.14f))
+        }
+        Text("${(Led.bright.value * 100).roundToInt()}%", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
 }
