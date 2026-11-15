@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -34,13 +33,6 @@ class MainActivity : ComponentActivity() {
             .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
             .maxByOrNull { it.refreshRate }
         if (fastestMode != null) {
-            val requestedRate = fastestMode.refreshRate
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val compatibility = if (Build.VERSION.SDK_INT >= 36) Window.FrameRateCompatibility.FRAME_RATE_COMPATIBILITY_AT_LEAST
-                    else Window.FrameRateCompatibility.FRAME_RATE_COMPATIBILITY_DEFAULT
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setFrameRate(requestedRate, compatibility, 0)
-                else window.setFrameRate(requestedRate, compatibility)
-            }
             window.attributes = window.attributes.apply {
                 preferredDisplayModeId = fastestMode.modeId
                 preferredRefreshRate = fastestMode.refreshRate
