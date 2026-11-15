@@ -13,7 +13,6 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -30,17 +29,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -54,7 +49,7 @@ class Ctl(ctx: Context) {
     var sens by mutableStateOf(1f)
     var smooth by mutableStateOf(0.9f)
     var useCover by mutableStateOf(true)
-    var pix by mutableStateOf(200f)
+    var pix by mutableStateOf(ctx.getSharedPreferences("led", 0).getInt("pixels", 200).toFloat())
     var fxName by mutableStateOf("")
     var active by mutableStateOf("")          // which music mode button is lit
     var pending = "music"
@@ -69,16 +64,6 @@ fun App() {
     val ctx = LocalContext.current
     val c = remember { Ctl(ctx) }
     var tab by remember { mutableStateOf(0) }
-    var previousTab by remember { mutableIntStateOf(tab) }
-    val tabBlur = remember { Animatable(0f) }
-    LaunchedEffect(tab) {
-        if (previousTab != tab) {
-            previousTab = tab
-            tabBlur.snapTo(8f)
-            tabBlur.animateTo(0f, tween(durationMillis = 320))
-        }
-    }
-    var rootSize by remember { mutableStateOf(IntSize(1080, 2400)) }
 
     // glass accent follows the colour the strip is showing
     var live by remember { mutableStateOf(Color(0xFF8B7BFF)) }
@@ -91,7 +76,7 @@ fun App() {
             delay(500)
         }
     }
-    val accent by animateColorAsState(live, tween(900), label = "accent")
+    val accent by animateColorAsState(live, tween(180), label = "accent")
 
     LaunchedEffect(Unit) {   // auto-connect on open when permissions are already granted
         if (Build.VERSION.SDK_INT < 31 || (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
@@ -110,18 +95,14 @@ fun App() {
         cap.launch(ctx.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
     }
 
-    CompositionLocalProvider(LocalAccent provides accent, LocalRoot provides rootSize) {
-        Box(Modifier.fillMaxSize().onSizeChanged { rootSize = it }) {
+    CompositionLocalProvider(LocalAccent provides accent) {
+        Box(Modifier.fillMaxSize()) {
             Canvas(Modifier.fillMaxSize()) { drawBackdrop(size, accent) }
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f).graphicsLayer {
-                    val settle = tabBlur.value / 8f
-                    scaleX = 1f - settle * 0.012f
-                    scaleY = 1f - settle * 0.012f
-                }.blur(tabBlur.value.dp)) {
-                    Crossfade(tab, animationSpec = tween(durationMillis = 320), label = "tab") { t ->
+                Box(Modifier.weight(1f)) {
+                    Crossfade(tab, animationSpec = tween(durationMillis = 180), label = "tab") { t ->
                         when (t) {
                             0 -> MusicTab(c)
                             1 -> ScenesTab(c)
@@ -294,8 +275,8 @@ private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
         }
         GlassCard {
             Label("LED strip")
-            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..255f, step = 1f, onChange = { c.pix = it })
-            GlassButton("Apply pixel count") { Led.setPixels(c.pix.roundToInt()) }
+            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..255f, step = 1f, onChange = { c.pix = it }, onFinish = { savePixelCount(ctx, c.pix.roundToInt()) })
+            GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
         }
         GlassCard {
             Label("Quick settings tile")

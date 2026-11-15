@@ -24,10 +24,18 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
-        // Let Android schedule Compose frames at the fastest mode this display supports.
-        val maxRefreshRate = windowManager.defaultDisplay.supportedModes.maxOfOrNull { it.refreshRate } ?: 0f
-        if (maxRefreshRate > 0f) {
-            window.attributes = window.attributes.apply { preferredRefreshRate = maxRefreshRate }
+        // Ask Android for the fastest mode at the current panel resolution. The OS may still
+        // lower the rate for power, thermal, or user display settings.
+        val display = windowManager.defaultDisplay
+        val currentMode = display.mode
+        val fastestMode = display.supportedModes
+            .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+            .maxByOrNull { it.refreshRate }
+        if (fastestMode != null) {
+            window.attributes = window.attributes.apply {
+                preferredDisplayModeId = fastestMode.modeId
+                preferredRefreshRate = fastestMode.refreshRate
+            }
         }
         Engine.init(applicationContext)
         setContent {
@@ -49,6 +57,9 @@ fun perms(): Array<String> {
 fun loadFavs(c: Context): Map<Int, String> {
     val o = JSONObject(c.getSharedPreferences("fx", 0).getString("f", "{}") ?: "{}")
     return o.keys().asSequence().associate { it.toInt() to o.getString(it) }
+}
+fun savePixelCount(c: Context, pixels: Int) {
+    c.getSharedPreferences("led", 0).edit().putInt("pixels", pixels.coerceIn(1, 255)).apply()
 }
 fun saveFavs(c: Context, m: Map<Int, String>) {
     val o = JSONObject(); m.forEach { (k, v) -> o.put(k.toString(), v) }

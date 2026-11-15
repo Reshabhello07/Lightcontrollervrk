@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -30,13 +29,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -47,13 +43,12 @@ import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------------------------
 //  Liquid-glass design system (native Compose take on the OpenGlass UI look)
-//  - every card blurs the *backdrop* behind it (Android 12+), adds a frosted tint,
-//    a lit rim and a soft top highlight
+//  - cards use translucent frosted tint over the shared backdrop, with a lit rim
+//    and a soft top highlight
 //  - pill controls with spring motion, glass thumb on sliders, sliding glass pill in the tab bar
 // ---------------------------------------------------------------------------------------------
 
 val LocalAccent = compositionLocalOf { Color(0xFF8B7BFF) }
-val LocalRoot = compositionLocalOf { IntSize(1080, 2400) }
 
 fun shiftHue(c: Color, deg: Float): Color {
     val hsv = FloatArray(3)
@@ -104,7 +99,7 @@ private val RimBrush = Brush.linearGradient(listOf(
 fun Modifier.tap(onClick: () -> Unit): Modifier =
     this.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
 
-/** A pane of glass: blurred backdrop + frosted tint + lit rim + top highlight. */
+/** A lightweight glass pane: translucent tint, lit rim, and top highlight. */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
@@ -113,21 +108,15 @@ fun GlassCard(
     pad: Dp = 18.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val root = LocalRoot.current
     val accent = LocalAccent.current
-    var pos by remember { mutableStateOf(Offset.Zero) }
     val top = if (strong) 0.20f else 0.15f
     val bottom = if (strong) 0.09f else 0.05f
     Box(modifier
         .fillMaxWidth()
-        .onGloballyPositioned { pos = it.positionInRoot() }
         .clip(shape)
         .border(1.dp, RimBrush, shape)
     ) {
-        // the real "glass": the wallpaper behind this card, blurred (Android 12+)
-        Canvas(Modifier.matchParentSize().blur(26.dp)) {
-            translate(-pos.x, -pos.y) { drawBackdrop(Size(root.width.toFloat(), root.height.toFloat()), accent) }
-        }
+        Box(Modifier.matchParentSize().background(Color.White.copy(alpha = if (strong) 0.10f else 0.07f)))
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = top), Color.White.copy(alpha = bottom)))))
         Box(Modifier.matchParentSize().background(accent.copy(alpha = 0.05f)))
         Box(Modifier.matchParentSize().drawBehind {

@@ -21,6 +21,7 @@ object Led {
     private val CHR = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
     private var gatt: BluetoothGatt? = null
     private var chr: BluetoothGattCharacteristic? = null
+    private var pixelConfigGatt: BluetoothGatt? = null
     val status = mutableStateOf("Not connected")
     // Highest brightness % the slider can reach. Lower this (e.g. 96) if the strip dims near 100%.
     const val MAX_PCT = 100
@@ -86,7 +87,7 @@ object Led {
 
     private fun closeGatt() {
         try { gatt?.disconnect(); gatt?.close() } catch (e: Exception) { }
-        gatt = null; chr = null; busy = false
+        gatt = null; chr = null; pixelConfigGatt = null; busy = false
     }
 
     @Volatile private var gen = 0   // invalidates a pending disconnect when connect() is called again
@@ -172,7 +173,7 @@ object Led {
             } else {
                 val was = wasUp; wasUp = false
                 try { g.close() } catch (e: Exception) { }   // always release the GATT client (fixes error 133 loops)
-                if (gatt === g) { gatt = null; chr = null; busy = false }
+                if (gatt === g) { gatt = null; chr = null; pixelConfigGatt = null; busy = false }
                 connecting = false
                 status.value = "Disconnected (code $s)"
                 val a = appCtx
@@ -181,7 +182,7 @@ object Led {
         }
         override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
             chr = g.getService(SVC)?.getCharacteristic(CHR)
-            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; startRender(); keepAlive() }
+            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; keepAlive(); if (pixelConfigGatt !== g) { pixelConfigGatt = g; setPixels(appCtx?.getSharedPreferences("led", 0)?.getInt("pixels", 200) ?: 200); CoroutineScope(Dispatchers.Default).launch { delay(120); if (gatt === g) startRender() } } else startRender() }
             else status.value = "Strip service not found"
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, s: Int) { busy = false }
