@@ -364,12 +364,17 @@ private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
             GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
         }
         GlassCard {
+            Label("Performance report")
+            Body("Tap Problem, then reproduce the stutter for 20 seconds. A report will open in the share sheet.", 0.75f)
+            Body(ProblemCapture.status.value, 0.65f)
+            GlassButton(if (ProblemCapture.status.value.startsWith("Capturing")) "Capturing…" else "Problem", primary = true) { ProblemCapture.start(ctx) }
+        }
+        GlassCard {
             Label("Quick settings tile")
             Body("Swipe down, tap the pencil, and drag “LED Smart Tempo” into your tiles. Tap once to start, tap again to turn off and disconnect.", 0.7f)
         }
     }
 }
-
 @Composable
 private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) {
     val accent = LocalAccent.current

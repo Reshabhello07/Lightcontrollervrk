@@ -19,6 +19,11 @@ import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+    override fun onDestroy() {
+        ProblemCapture.activityDestroyed(this)
+        super.onDestroy()
+    }
+
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         enableEdgeToEdge(

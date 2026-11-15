@@ -24,6 +24,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("dev.shayxo.liquidglass:liquidglass:1.0.0")
     implementation("androidx.palette:palette-ktx:1.0.0")
-    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
