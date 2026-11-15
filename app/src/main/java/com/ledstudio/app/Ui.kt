@@ -12,11 +12,18 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -128,8 +135,16 @@ fun App() {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
                 Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }) {
-                    Crossfade(tab, animationSpec = tween(durationMillis = 180), label = "tab") { t ->
-                        when (t) {
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            val direction = if (targetState > initialState) 1 else -1
+                            (fadeIn(tween(240)) + slideInHorizontally(tween(260)) { direction * it / 10 } + scaleIn(initialScale = 0.985f, animationSpec = tween(240))) togetherWith
+                                (fadeOut(tween(170)) + slideOutHorizontally(tween(190)) { -direction * it / 16 } + scaleOut(targetScale = 0.99f, animationSpec = tween(170)))
+                        },
+                        label = "tab"
+                    ) { page ->
+                        when (page) {
                             0 -> MusicTab(c)
                             1 -> ScenesTab(c)
                             2 -> SyncTab(c)
