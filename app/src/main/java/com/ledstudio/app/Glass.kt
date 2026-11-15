@@ -110,21 +110,19 @@ fun GlassCard(
     pad: Dp = 18.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val accent = LocalAccent.current
-    val top = if (strong) 0.20f else 0.15f
-    val bottom = if (strong) 0.09f else 0.05f
+    val top = if (strong) 0.11f else 0.07f
+    val bottom = if (strong) 0.04f else 0.025f
     Box(modifier
         .fillMaxWidth()
+        .glassEffect(Glass.Regular, shape)
         .clip(shape)
-        .glassEffect(Glass.Regular.tint(LocalAccent.current), shape)
         .border(1.dp, RimBrush, shape)
     ) {
-        Box(Modifier.matchParentSize().background(Color.White.copy(alpha = if (strong) 0.10f else 0.07f)))
+        Box(Modifier.matchParentSize().background(Color.White.copy(alpha = if (strong) 0.045f else 0.03f)))
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = top), Color.White.copy(alpha = bottom)))))
-        Box(Modifier.matchParentSize().background(accent.copy(alpha = 0.05f)))
         Box(Modifier.matchParentSize().drawBehind {
             drawRect(
-                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Transparent), startY = 0f, endY = size.height * 0.45f),
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent), startY = 0f, endY = size.height * 0.45f),
                 size = Size(size.width, size.height * 0.45f))
         })
         Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
