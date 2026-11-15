@@ -28,7 +28,7 @@ class LedService : Service() {
             .setSmallIcon(android.R.drawable.ic_media_play).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) else startForeground(1, n)
         val data = i?.getParcelableExtra<Intent>("data") ?: return START_NOT_STICKY
-        val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(i.getIntExtra("code", 0), data)
+        val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(i.getIntExtra("code", 0), data) ?: return START_NOT_STICKY
         p.registerCallback(object : MediaProjection.Callback() {}, null)
         mp = p
         running = true; style = if (i.getStringExtra("mode") == "screen") -1 else i.getIntExtra("style", 0); Tiles.poke(applicationContext)
