@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import com.wexpa.liquidglass.Glass
+import com.wexpa.liquidglass.glassEffect
+import com.wexpa.liquidglass.GlassTabBar as LiquidGlassTabBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +39,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -114,6 +116,7 @@ fun GlassCard(
     Box(modifier
         .fillMaxWidth()
         .clip(shape)
+        .glassEffect(Glass.Regular.tint(LocalAccent.current), shape)
         .border(1.dp, RimBrush, shape)
     ) {
         Box(Modifier.matchParentSize().background(Color.White.copy(alpha = if (strong) 0.10f else 0.07f)))
@@ -261,25 +264,22 @@ fun Body(t: String, alpha: Float = 0.8f) = Text(t, fontSize = 15.sp, color = Col
 @Composable
 fun GlassTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val items = listOf("♪" to "Music", "✦" to "Scenes", "⇄" to "Sync", "⚙" to "Settings")
-    GlassCard(modifier, shape = RoundedCornerShape(38.dp), strong = true, pad = 6.dp) {
-        BoxWithConstraints(Modifier.fillMaxWidth().height(60.dp)) {
-            val w = maxWidth / items.size
-            val selectedPosition by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 0.88f, stiffness = 680f), label = "tabPosition")
-            val pill = RoundedCornerShape(32.dp)
-            Box(Modifier.width(w).fillMaxHeight().graphicsLayer { translationX = size.width * selectedPosition }.padding(2.dp).clip(pill)
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.12f))))
-                .border(1.dp, RimBrush, pill))
-            Row(Modifier.fillMaxSize()) {
-                items.forEachIndexed { i, (glyph, name) ->
-                    val on = i == selected
-                    Column(Modifier.weight(1f).fillMaxHeight().tap { onSelect(i) },
-                        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(glyph, fontSize = 20.sp, color = if (on) Color.White else Color.White.copy(alpha = 0.60f))
-                        Text(name, fontSize = 11.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (on) Color.White else Color.White.copy(alpha = 0.60f))
-                    }
-                }
-            }
+    LiquidGlassTabBar(
+        itemCount = items.size,
+        selectedIndex = selected,
+        onSelected = onSelect,
+        modifier = modifier.fillMaxWidth().height(72.dp),
+        motionEnabled = true
+    ) { index, isSelected ->
+        val (glyph, name) = items[index]
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(glyph, fontSize = 20.sp, color = if (isSelected) Color.White else Color.White.copy(alpha = 0.64f))
+            Text(name, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.64f))
         }
     }
 }
