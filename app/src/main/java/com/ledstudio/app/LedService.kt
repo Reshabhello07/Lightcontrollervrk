@@ -17,6 +17,7 @@ import android.os.IBinder
 class LedService : Service() {
     companion object { @Volatile var running = false; @Volatile var style = -1 }
     private var mp: MediaProjection? = null
+    private var projectionCallback: MediaProjection.Callback? = null
     private var vd: VirtualDisplay? = null
     override fun onBind(i: Intent?): IBinder? = null
 
@@ -29,7 +30,9 @@ class LedService : Service() {
         if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) else startForeground(1, n)
         val data = i?.getParcelableExtra<Intent>("data") ?: return START_NOT_STICKY
         val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(i.getIntExtra("code", 0), data) ?: return START_NOT_STICKY
-        p.registerCallback(object : MediaProjection.Callback() {}, null)
+        val callback = object : MediaProjection.Callback() { override fun onStop() { if (mp === p) stopSelf() } }
+        p.registerCallback(callback, null)
+        projectionCallback = callback
         mp = p
         running = true; style = if (i.getStringExtra("mode") == "screen") -1 else i.getIntExtra("style", 0); Tiles.poke(applicationContext)
         if (i.getStringExtra("mode") == "screen") {
@@ -51,5 +54,19 @@ class LedService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onDestroy() { running = false; style = -1; Engine.stop(); vd?.release(); mp?.stop(); Tiles.poke(applicationContext); super.onDestroy() }
+    override fun onDestroy() {
+        running = false
+        style = -1
+        Engine.stop()
+        vd?.release()
+        vd = null
+        mp?.let { projection ->
+            projectionCallback?.let { callback -> runCatching { projection.unregisterCallback(callback) } }
+            projectionCallback = null
+            mp = null
+            projection.stop()
+        }
+        Tiles.poke(applicationContext)
+        super.onDestroy()
+    }
 }

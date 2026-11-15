@@ -34,6 +34,8 @@ object Led {
     @Volatile var paused = false   // true while a built-in effect runs on the strip
     @Volatile private var busy = false
     private var lastSent = -1
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var pulseJob: Job? = null
     private var job: Job? = null
 
     fun hsv(h: Float) = Color.HSVToColor(floatArrayOf(h, 1f, 1f))
@@ -45,7 +47,7 @@ object Led {
         val prev = cur
         holdUntil = System.currentTimeMillis() + ms + 500
         fadeTo(c, 150, false, true)
-        CoroutineScope(Dispatchers.Default).launch { delay(ms); holdUntil = 0; fadeTo(prev, 500, true, true) }
+        pulseJob?.cancel(); pulseJob = scope.launch { delay(ms); holdUntil = 0; fadeTo(prev, 500, true, true) }
     }
 
     @Synchronized fun fadeTo(c: Int, ms: Long, smooth: Boolean = false, force: Boolean = false) {
@@ -63,7 +65,7 @@ object Led {
 
     private fun startRender() {
         if (job?.isActive == true) return
-        job = CoroutineScope(Dispatchers.Default).launch {
+        job = scope.launch {
             var lastWrite = 0L
             while (isActive) {
                 val c = compute(); cur = c
@@ -86,6 +88,7 @@ object Led {
     private var retries = 0
 
     private fun closeGatt() {
+        job?.cancel(); job = null
         try { gatt?.disconnect(); gatt?.close() } catch (e: Exception) { }
         gatt = null; chr = null; pixelConfigGatt = null; busy = false
     }
@@ -102,7 +105,7 @@ object Led {
         } catch (e: Exception) { }
         scanCb = null
         fadeTo(Color.BLACK, 120, false, true)
-        CoroutineScope(Dispatchers.Default).launch {
+        scope.launch {
             delay(300)
             if (g != gen) return@launch
             write(Color.BLACK)
@@ -165,7 +168,7 @@ object Led {
         override fun onConnectionStateChange(g: BluetoothGatt, s: Int, n: Int) {
             if (n == BluetoothProfile.STATE_CONNECTED && s == BluetoothGatt.GATT_SUCCESS) {
                 status.value = "Discovering..."
-                CoroutineScope(Dispatchers.Default).launch {
+                scope.launch {
                     delay(400)
                     g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     g.discoverServices()
@@ -173,7 +176,7 @@ object Led {
             } else {
                 val was = wasUp; wasUp = false
                 try { g.close() } catch (e: Exception) { }   // always release the GATT client (fixes error 133 loops)
-                if (gatt === g) { gatt = null; chr = null; pixelConfigGatt = null; busy = false }
+                if (gatt === g) { job?.cancel(); job = null; gatt = null; chr = null; pixelConfigGatt = null; busy = false }
                 connecting = false
                 status.value = "Disconnected (code $s)"
                 val a = appCtx
@@ -182,7 +185,7 @@ object Led {
         }
         override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
             chr = g.getService(SVC)?.getCharacteristic(CHR)
-            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; keepAlive(); if (pixelConfigGatt !== g) { pixelConfigGatt = g; setPixels(appCtx?.getSharedPreferences("led", 0)?.getInt("pixels", 200) ?: 200); CoroutineScope(Dispatchers.Default).launch { delay(120); if (gatt === g) startRender() } } else startRender() }
+            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; keepAlive(); if (pixelConfigGatt !== g) { pixelConfigGatt = g; setPixels(appCtx?.getSharedPreferences("led", 0)?.getInt("pixels", 200) ?: 200); scope.launch { delay(120); if (gatt === g) startRender() } } else startRender() }
             else status.value = "Strip service not found"
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, s: Int) { busy = false }
@@ -206,7 +209,7 @@ object Led {
     // From the snoop log: 03 = built-in effect number, 05 04 00 <n> 03 = pixel count
     private fun raw(vararg v: Int) {
         val b = ByteArray(9) { v[it].toByte() }
-        CoroutineScope(Dispatchers.Default).launch { repeat(10) { if (writeBytes(b)) return@launch; delay(30) } }
+        scope.launch { repeat(10) { if (writeBytes(b)) return@launch; delay(30) } }
     }
     fun effect(id: Int) { paused = true; raw(0x7B, 0xFF, 0x03, id, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF) }
     fun setPixels(n: Int) = raw(0x7B, 0xFF, 0x05, 0x04, 0x00, n.coerceIn(1, 255), 0x03, 0xFF, 0xBF)

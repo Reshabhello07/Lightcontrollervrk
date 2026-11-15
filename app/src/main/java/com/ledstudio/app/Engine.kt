@@ -259,26 +259,33 @@ object Engine {
             while (isActive) {
                 val img = r.acquireLatestImage()
                 if (img == null) { delay(30); continue }
-                val p = img.planes[0]; val b = p.buffer; val rs = p.rowStride
-                var sr = 0L; var sg = 0L; var sb = 0L; var sw = 0L
-                var y = 0
-                while (y < img.height) {
-                    var x = 0
-                    while (x < img.width) {
-                        val o = y * rs + x * 4
-                        val R = b.get(o).toInt() and 255; val G = b.get(o + 1).toInt() and 255; val B = b.get(o + 2).toInt() and 255
-                        val w = 1 + maxOf(R, G, B) - minOf(R, G, B)
-                        sr += R * w; sg += G * w; sb += B * w; sw += w; x += 3
+                var sampledColor: Int? = null
+                try {
+                    val plane = img.planes[0]
+                    val buffer = plane.buffer
+                    val rowStride = plane.rowStride
+                    var redSum = 0L; var greenSum = 0L; var blueSum = 0L; var weightSum = 0L
+                    var y = 0
+                    while (y < img.height) {
+                        var x = 0
+                        while (x < img.width) {
+                            val offset = y * rowStride + x * 4
+                            val red = buffer.get(offset).toInt() and 255
+                            val green = buffer.get(offset + 1).toInt() and 255
+                            val blue = buffer.get(offset + 2).toInt() and 255
+                            val weight = 1 + maxOf(red, green, blue) - minOf(red, green, blue)
+                            redSum += red * weight; greenSum += green * weight; blueSum += blue * weight; weightSum += weight
+                            x += 3
+                        }
+                        y += 3
                     }
-                    y += 3
-                }
-                img.close()
-                if (sw > 0) Led.fadeTo(Color.rgb((sr / sw).toInt(), (sg / sw).toInt(), (sb / sw).toInt()), 140)
+                    if (weightSum > 0) sampledColor = Color.rgb((redSum / weightSum).toInt(), (greenSum / weightSum).toInt(), (blueSum / weightSum).toInt())
+                } finally { img.close() }
+                sampledColor?.let { Led.fadeTo(it, 140) }
                 delay(40)
             }
         } finally { r.close() }
     }
-
     // ---- Music from phone audio. style 0 breathing, 1 spectrum, 2 smart tempo ----
     fun music(rec: AudioRecord, fixed: Int?, sens: Float, style: Int) = run("music") {
         val buf = ShortArray(1024)
@@ -298,7 +305,7 @@ object Engine {
         rec.startRecording()
         try {
             while (isActive) {
-                val n = rec.read(buf, 0, buf.size)
+                val n = withContext(Dispatchers.IO) { rec.read(buf, 0, buf.size) }
                 if (n <= 0) continue
                 if (style != 2) decayK = decay
                 var sb = 0f; var sm = 0f; var sh = 0f
