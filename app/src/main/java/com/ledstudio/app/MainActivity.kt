@@ -24,6 +24,11 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
+        // Let Android schedule Compose frames at the fastest mode this display supports.
+        val maxRefreshRate = windowManager.defaultDisplay.supportedModes.maxOfOrNull { it.refreshRate } ?: 0f
+        if (maxRefreshRate > 0f) {
+            window.attributes = window.attributes.apply { preferredRefreshRate = maxRefreshRate }
+        }
         Engine.init(applicationContext)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {

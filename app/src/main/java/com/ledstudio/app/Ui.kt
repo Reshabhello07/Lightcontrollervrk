@@ -13,6 +13,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -29,6 +30,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -66,6 +69,15 @@ fun App() {
     val ctx = LocalContext.current
     val c = remember { Ctl(ctx) }
     var tab by remember { mutableStateOf(0) }
+    var previousTab by remember { mutableIntStateOf(tab) }
+    val tabBlur = remember { Animatable(0f) }
+    LaunchedEffect(tab) {
+        if (previousTab != tab) {
+            previousTab = tab
+            tabBlur.snapTo(8f)
+            tabBlur.animateTo(0f, tween(durationMillis = 320))
+        }
+    }
     var rootSize by remember { mutableStateOf(IntSize(1080, 2400)) }
 
     // glass accent follows the colour the strip is showing
@@ -104,8 +116,12 @@ fun App() {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f)) {
-                    Crossfade(tab, label = "tab") { t ->
+                Box(Modifier.weight(1f).graphicsLayer {
+                    val settle = tabBlur.value / 8f
+                    scaleX = 1f - settle * 0.012f
+                    scaleY = 1f - settle * 0.012f
+                }.blur(tabBlur.value.dp)) {
+                    Crossfade(tab, animationSpec = tween(durationMillis = 320), label = "tab") { t ->
                         when (t) {
                             0 -> MusicTab(c)
                             1 -> ScenesTab(c)

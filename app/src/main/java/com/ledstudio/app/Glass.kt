@@ -275,9 +275,9 @@ fun GlassTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Mod
     GlassCard(modifier, shape = RoundedCornerShape(38.dp), strong = true, pad = 6.dp) {
         BoxWithConstraints(Modifier.fillMaxWidth().height(60.dp)) {
             val w = maxWidth / items.size
-            val x by animateDpAsState(w * selected, spring(dampingRatio = 0.72f, stiffness = 380f), label = "tab")
+            val selectedPosition by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 0.88f, stiffness = 680f), label = "tabPosition")
             val pill = RoundedCornerShape(32.dp)
-            Box(Modifier.offset(x = x).width(w).fillMaxHeight().padding(2.dp).clip(pill)
+            Box(Modifier.width(w).fillMaxHeight().graphicsLayer { translationX = size.width * selectedPosition }.padding(2.dp).clip(pill)
                 .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.12f))))
                 .border(1.dp, RimBrush, pill))
             Row(Modifier.fillMaxSize()) {
