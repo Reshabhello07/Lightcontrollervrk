@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.CompositionLocalProvider
 import com.wexpa.liquidglass.LiquidGlassTheme
+import com.wexpa.liquidglass.LocalGlassAdaptiveQuality
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
@@ -41,12 +43,13 @@ class MainActivity : ComponentActivity() {
         Engine.init(applicationContext)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                LiquidGlassTheme(background = Color(0xFF05060B)) {
-                    Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App() }
+                CompositionLocalProvider(LocalGlassAdaptiveQuality provides true) {
+                    LiquidGlassTheme(background = Color(0xFF05060B), renderScale = 0.7f) {
+                        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App() }
+                    }
                 }
             }
         }
-    }
 }
 
 fun perms(): Array<String> {
