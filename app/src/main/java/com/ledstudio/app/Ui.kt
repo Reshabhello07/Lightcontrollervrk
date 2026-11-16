@@ -35,7 +35,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.Alignment
@@ -68,6 +67,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private val ShireFontFamily = FontFamily(Font(R.font.clarendon_regular))
+private val SuperBouncerFontFamily = FontFamily(Font(R.font.super_bouncer))
 
 /** All UI state that the tabs share. */
 class Ctl(ctx: Context) {
