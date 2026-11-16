@@ -24,8 +24,8 @@ class LedService : Service() {
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
         Engine.init(applicationContext)
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("led", "LED Studio", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, "led").setContentTitle("LED Studio").setContentText("Lights are syncing")
+        nm.createNotificationChannel(NotificationChannel("led", "Shire", NotificationManager.IMPORTANCE_LOW))
+        val n = Notification.Builder(this, "led").setContentTitle("Shire").setContentText("Lights are syncing")
             .setSmallIcon(android.R.drawable.ic_media_play).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) else startForeground(1, n)
         val data = i?.getParcelableExtra<Intent>("data") ?: return START_NOT_STICKY

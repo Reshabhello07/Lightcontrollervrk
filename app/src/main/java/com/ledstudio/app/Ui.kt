@@ -226,7 +226,7 @@ private fun Header(c: Ctl, onConnect: () -> Unit) {
     GlassCard(strong = true, pad = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("LED Studio", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Shire", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) Color(0xFF4ADE80) else Color(0xFFFBBF24)))
                     Spacer(Modifier.width(7.dp))
@@ -237,8 +237,6 @@ private fun Header(c: Ctl, onConnect: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             GlassButton("Off") { stopAll(ctx, afterglow = false); c.active = ""; Led.fadeTo(android.graphics.Color.BLACK, 400, true) }
         }
-        SliderRow("Brightness", "${(Led.bright.value * 100).roundToInt()}%", Led.bright.value * 100f, 5f..Led.MAX_PCT.toFloat(),
-            onChange = { Led.bright.value = it.roundToInt() / 100f }, step = 1f)
     }
 }
 
@@ -267,8 +265,8 @@ private data class SceneChoice(val title: String, val image: Int, val effect: St
 
 private val sceneChoices = listOf(
     SceneChoice("Aurora", R.drawable.scene_aurora, "aurora"),
-    SceneChoice("Crimson", R.drawable.scene_crimson, "lava"),
-    SceneChoice("Warm Ambience", R.drawable.scene_warm, "candle")
+    SceneChoice("Crimson", R.drawable.scene_crimson, "crimson"),
+    SceneChoice("Warm Ambience", R.drawable.scene_warm, "warm")
 )
 
 @Composable

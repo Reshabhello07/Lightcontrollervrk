@@ -196,6 +196,32 @@ object Engine {
                     else hsvC(225f, 0.9f, 0.25f + 0.1f * sin(t)) } }
             "candle" -> { var v = 0.8f
                 scene { if (Random.nextFloat() < 0.35f) v = 0.45f + 0.55f * Random.nextFloat(); hsvC(22f, 1f, v) } }
+            "crimson" -> {
+                var glint = 0f
+                var nextGlint = 1.5f
+                scene { t ->
+                    if (t > nextGlint) {
+                        glint = Random.nextFloat() * 0.16f
+                        nextGlint = t + 1.1f + Random.nextFloat() * 2.4f
+                    }
+                    val pulse = (0.5f + 0.5f * sin(t * 0.92f)).pow(1.7f)
+                    val hue = 350f + 9f * sin(t * 0.22f)
+                    hsvC(hue, 0.94f, (0.19f + 0.65f * pulse + glint).coerceIn(0.12f, 0.92f))
+                }
+            }
+            "warm" -> {
+                var flicker = 0f
+                var nextFlicker = 0f
+                scene { t ->
+                    if (t > nextFlicker) {
+                        flicker = (Random.nextFloat() - 0.5f) * 0.07f
+                        nextFlicker = t + 0.55f + Random.nextFloat() * 0.9f
+                    }
+                    val breathe = 0.5f + 0.5f * sin(t * 0.38f)
+                    val hue = 31f + 3f * sin(t * 0.16f)
+                    hsvC(hue, 0.72f, (0.38f + 0.25f * breathe + flicker).coerceIn(0.28f, 0.76f))
+                }
+            }
             "aurora" -> scene { t -> hsvC(150f + 110f * (0.5f + 0.5f * sin(t / 7f)), 0.85f, 0.55f + 0.35f * sin(t / 3.3f)) }
             "ocean" -> scene { t -> hsvC(195f + 15f * sin(t / 9f), 0.9f, 0.45f + 0.45f * (0.5f + 0.5f * sin(t * 1.2f))) }
             "lava" -> { var v = 0.6f

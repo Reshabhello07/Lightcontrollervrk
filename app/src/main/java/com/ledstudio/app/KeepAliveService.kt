@@ -13,7 +13,7 @@ class KeepAliveService : Service() {
         Engine.init(applicationContext)
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel("keep", "Strip connection", NotificationManager.IMPORTANCE_MIN))
-        val n = Notification.Builder(this, "keep").setContentTitle("LED Studio").setContentText("Connected to your strip")
+        val n = Notification.Builder(this, "keep").setContentTitle("Shire").setContentText("Connected to your strip")
             .setSmallIcon(android.R.drawable.ic_media_play).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(2, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE) else startForeground(2, n)
         return START_STICKY

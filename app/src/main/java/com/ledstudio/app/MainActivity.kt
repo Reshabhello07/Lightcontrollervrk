@@ -12,10 +12,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import com.wexpa.liquidglass.LiquidGlassTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -42,7 +45,10 @@ class MainActivity : ComponentActivity() {
         }
         Engine.init(applicationContext)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(
+                colorScheme = darkColorScheme(),
+                typography = Typography(defaultFontFamily = FontFamily(Font(R.font.clarendon_regular)))
+            ) {
                 LiquidGlassTheme(background = Color(0xFF05060B), renderScale = 0.7f) {
                     Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App(autoStartSmartTempo = intent.getBooleanExtra(EXTRA_START_SMART_TEMPO, false)) }
                 }
