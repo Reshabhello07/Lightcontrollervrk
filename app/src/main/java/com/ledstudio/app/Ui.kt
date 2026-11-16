@@ -41,10 +41,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -58,7 +55,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -97,17 +93,10 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
     val pageAlpha = remember { Animatable(1f) }
     val pageOffset = remember { Animatable(0f) }
     val pageBlur = remember { Animatable(0f) }
-    val morph = remember { Animatable(1f) }
-    var pageOrigin by remember { mutableStateOf(Offset.Zero) }
-    var pageSize by remember { mutableStateOf(IntSize.Zero) }
-    var navOrigin by remember { mutableStateOf(Offset.Zero) }
-    var navSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(tab) {
         if (previousTab != tab) {
             val direction = if (tab > previousTab) 1f else -1f
             previousTab = tab
-            morph.snapTo(0f)
-            launch { morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
             coroutineScope {
                 launch { pageBlur.animateTo(if (tab == 1) 0f else 7f, tween(90, easing = FastOutSlowInEasing)) }
                 pageAlpha.animateTo(0f, tween(90, easing = FastOutSlowInEasing))
@@ -155,10 +144,9 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
         Box(Modifier.fillMaxSize()) {
             Crossfade(targetState = displayedTab, animationSpec = tween(300), label = "tab-wallpaper") { page ->
                 val (wallpaper, scrim) = when (page) {
-                    0 -> R.drawable.led1 to 0.58f
-                    1 -> R.drawable.led2 to 0.34f
-                    2 -> R.drawable.led4 to 0.78f
-                    else -> R.drawable.led4 to 0.78f
+                    0 -> R.drawable.led1 to 0.43f
+                    1 -> R.drawable.led2 to 0.24f
+                    else -> R.drawable.led4 to 0.54f
                 }
                 val wallpaperContext = LocalContext.current.applicationContext
                 val wallpaperBitmap by produceState<ImageBitmap?>(null, wallpaper) {
@@ -169,16 +157,14 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                 Box(Modifier.fillMaxSize()) {
                     wallpaperBitmap?.let { bitmap ->
                         Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        if (page != 1) {
-                            Image(
-                                bitmap, contentDescription = null, contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().graphicsLayer {
-                                    scaleX = 1.16f
-                                    scaleY = 1.16f
-                                    alpha = 0.30f
-                                }.blur(28.dp)
-                            )
-                        }
+                        Image(
+                            bitmap, contentDescription = null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                scaleX = 1.18f
+                                scaleY = 1.18f
+                                alpha = 0.48f
+                            }.blur(28.dp)
+                        )
                     }
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
                 }
@@ -188,7 +174,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                     Header(c, onConnect = { perm.launch(perms()) })
                 }
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }.blur(pageBlur.value.dp).graphicsLayer {
+                Box(Modifier.weight(1f).blur(pageBlur.value.dp).graphicsLayer {
                     alpha = pageAlpha.value
                     translationX = pageOffset.value * size.width
                     scaleX = 0.985f + (1f - pageAlpha.value) * 0.015f
@@ -200,36 +186,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                         else -> SettingsTab(c, onConnect = { perm.launch(perms()) })
                     }
                 }
-                GlassTabBar(tab, { tab = it }, Modifier.navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp).onGloballyPositioned { navOrigin = it.positionInRoot(); navSize = it.size })
-            }
-            Canvas(Modifier.fillMaxSize()) {
-                val progress = morph.value
-                if (progress < 1f && navSize.width > 0 && pageSize.height > 0) {
-                    val itemWidth = navSize.width / 3f
-                    val start = Offset(navOrigin.x + itemWidth * (tab + 0.5f), navOrigin.y + 5.dp.toPx())
-                    val end = Offset(pageOrigin.x + 30.dp.toPx(), pageOrigin.y + 24.dp.toPx())
-                    val lift = (start.y - end.y).coerceAtLeast(1f)
-                    val c1 = Offset(start.x, start.y - lift * 0.42f)
-                    val c2 = Offset(end.x, end.y + lift * 0.32f)
-                    fun point(t: Float): Offset {
-                        val u = 1f - t
-                        return Offset(
-                            u * u * u * start.x + 3f * u * u * t * c1.x + 3f * u * t * t * c2.x + t * t * t * end.x,
-                            u * u * u * start.y + 3f * u * u * t * c1.y + 3f * u * t * t * c2.y + t * t * t * end.y
-                        )
-                    }
-                    val path = Path()
-                    val segments = (28 * progress).toInt().coerceAtLeast(1)
-                    for (i in 0..segments) {
-                        val p = point(progress * i / segments)
-                        if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
-                    }
-                    val alpha = (1f - progress).coerceIn(0f, 1f)
-                    drawPath(path, Brush.linearGradient(listOf(accent.copy(alpha = 0f), Color.White.copy(alpha = alpha), accent.copy(alpha = alpha)), start = start, end = end), style = Stroke(width = 3.dp.toPx()))
-                    val bead = point(progress)
-                    drawCircle(accent.copy(alpha = alpha * 0.24f), radius = 20.dp.toPx(), center = bead)
-                    drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = alpha), accent.copy(alpha = alpha * 0.75f), Color.Transparent), center = bead, radius = 11.dp.toPx()), radius = 11.dp.toPx(), center = bead)
-                }
+                GlassTabBar(tab, { tab = it }, Modifier.navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp))
             }
         }
     }

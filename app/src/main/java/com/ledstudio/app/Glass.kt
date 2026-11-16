@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -106,7 +107,11 @@ fun GlassButton(text: String, modifier: Modifier = Modifier, primary: Boolean = 
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.62f, stiffness = 420f), label = "press")
-    val bubble by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.72f, stiffness = 260f), label = "glass-bubble")
+    val glow by animateFloatAsState(
+        if (pressed) 1f else 0f,
+        spring(dampingRatio = 0.64f, stiffness = 340f),
+        label = "button-press-glow"
+    )
     val shape = RoundedCornerShape(50)
     val fill = if (primary) Brush.verticalGradient(listOf(accent.copy(alpha = 0.66f), accent.copy(alpha = 0.24f)))
     else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.055f)))
@@ -115,26 +120,31 @@ fun GlassButton(text: String, modifier: Modifier = Modifier, primary: Boolean = 
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(fill)
+            .drawBehind {
+                if (glow > 0.001f) {
+                    val center = Offset(size.width * 0.5f, size.height * 0.46f)
+                    val radius = maxOf(size.width, size.height) * 1.12f
+                    val rim = CornerRadius(size.height / 2f, size.height / 2f)
+                    drawRoundRect(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.56f * glow), accent.copy(alpha = 0.62f * glow), Color.Transparent),
+                            center = center,
+                            radius = radius
+                        ),
+                        cornerRadius = rim
+                    )
+                    drawRoundRect(
+                        Color.White.copy(alpha = 0.62f * glow),
+                        cornerRadius = rim,
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                }
+            }
             .border(1.dp, RimBrush, shape)
             .clickable(interactionSource = src, indication = null, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 11.dp),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.matchParentSize()) {
-            if (bubble > 0.001f) {
-                val center = Offset(size.width * (0.16f + 0.68f * bubble), size.height * 0.5f)
-                val radius = maxOf(size.width, size.height) * 0.86f
-                drawCircle(
-                    Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = 0.42f * bubble), accent.copy(alpha = 0.20f * bubble), Color.Transparent),
-                        center = center,
-                        radius = radius
-                    ),
-                    radius = radius,
-                    center = center
-                )
-            }
-        }
         Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
     }
 }
