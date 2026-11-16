@@ -12,15 +12,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.darkColorScheme
 import com.wexpa.liquidglass.LiquidGlassTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.runtime.CompositionLocalProvider
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -47,12 +42,9 @@ class MainActivity : ComponentActivity() {
         }
         Engine.init(applicationContext)
         setContent {
-            val shireFont = FontFamily(Font(R.font.clarendon_regular))
             MaterialTheme(colorScheme = darkColorScheme()) {
-                CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = shireFont)) {
-                    LiquidGlassTheme(background = Color(0xFF05060B), renderScale = 0.7f) {
-                        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App(autoStartSmartTempo = intent.getBooleanExtra(EXTRA_START_SMART_TEMPO, false)) }
-                    }
+                LiquidGlassTheme(background = Color(0xFF05060B), renderScale = 0.7f) {
+                    Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App(autoStartSmartTempo = intent.getBooleanExtra(EXTRA_START_SMART_TEMPO, false)) }
                 }
             }
         }

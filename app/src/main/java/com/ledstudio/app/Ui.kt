@@ -4,6 +4,7 @@ package com.ledstudio.app
 
 import android.Manifest
 import android.app.Activity
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,6 +25,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +34,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -43,10 +50,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +63,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -99,16 +109,16 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
             morph.snapTo(0f)
             launch { morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
             coroutineScope {
-                launch { pageBlur.animateTo(12f, tween(90, easing = FastOutSlowInEasing)) }
+                launch { pageBlur.animateTo(if (tab == 1) 0f else 7f, tween(90, easing = FastOutSlowInEasing)) }
                 pageAlpha.animateTo(0f, tween(90, easing = FastOutSlowInEasing))
             }
             displayedTab = tab
             pageOffset.snapTo(direction * 0.12f)
             pageAlpha.snapTo(0f)
+            pageBlur.snapTo(0f)
             coroutineScope {
-                launch { pageAlpha.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
-                launch { pageOffset.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
-                launch { pageBlur.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+                launch { pageAlpha.animateTo(1f, tween(280, easing = FastOutSlowInEasing)) }
+                launch { pageOffset.animateTo(0f, tween(280, easing = FastOutSlowInEasing)) }
             }
         }
     }
@@ -137,38 +147,46 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
     }
 
     val accent = Color(0xFF8B7BFF)
-    CompositionLocalProvider(LocalAccent provides accent) {
+    val mainFont = SuperBouncerFontFamily
+    CompositionLocalProvider(
+        LocalAccent provides accent,
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = mainFont)
+    ) {
         Box(Modifier.fillMaxSize()) {
-            Crossfade(targetState = tab, animationSpec = tween(360), label = "tab-wallpaper") { page ->
+            Crossfade(targetState = displayedTab, animationSpec = tween(300), label = "tab-wallpaper") { page ->
                 val (wallpaper, scrim) = when (page) {
                     0 -> R.drawable.led1 to 0.58f
                     1 -> R.drawable.led2 to 0.34f
                     2 -> R.drawable.led3 to 0.78f
                     else -> R.drawable.led4 to 0.78f
                 }
-                val wallpaperPainter = painterResource(wallpaper)
+                val wallpaperContext = LocalContext.current.applicationContext
+                val wallpaperBitmap by produceState<ImageBitmap?>(null, wallpaper) {
+                    value = withContext(Dispatchers.IO) {
+                        BitmapFactory.decodeResource(wallpaperContext.resources, wallpaper)?.asImageBitmap()
+                    }
+                }
                 Box(Modifier.fillMaxSize()) {
-                    Image(
-                        painter = wallpaperPainter,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Image(
-                        painter = wallpaperPainter,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().graphicsLayer {
-                            scaleX = 1.16f
-                            scaleY = 1.16f
-                            alpha = 0.36f
-                        }.blur(42.dp)
-                    )
+                    wallpaperBitmap?.let { bitmap ->
+                        Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        if (page != 1) {
+                            Image(
+                                bitmap, contentDescription = null, contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    scaleX = 1.16f
+                                    scaleY = 1.16f
+                                    alpha = 0.30f
+                                }.blur(28.dp)
+                            )
+                        }
+                    }
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
                 }
             }
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
-                Header(c, onConnect = { perm.launch(perms()) })
+                CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = ShireFontFamily)) {
+                    Header(c, onConnect = { perm.launch(perms()) })
+                }
                 Spacer(Modifier.height(12.dp))
                 Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }.blur(pageBlur.value.dp).graphicsLayer {
                     alpha = pageAlpha.value
@@ -178,7 +196,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                 }) {
                     when (displayedTab) {
                         0 -> MusicTab(c)
-                        1 -> ScenesTab(c)
+                        1 -> CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = ShireFontFamily)) { ScenesTab(c) }
                         2 -> SyncTab(c)
                         else -> SettingsTab(c, onConnect = { perm.launch(perms()) })
                     }
@@ -288,11 +306,11 @@ private fun ScenesTab(c: Ctl) {
                     Led.fadeTo(Led.hsv(c.hue), 120)
                 }
             )
-            Column(
-                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            LazyColumn(
+                Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                sceneChoices.forEach { scene ->
+                items(sceneChoices, key = { it.title }) { scene ->
                     SceneImageCard(scene, c.selectedScene == scene.title) {
                         c.selectedScene = scene.title
                         stopAll(ctx)
@@ -376,12 +394,22 @@ private fun ScenesTab(c: Ctl) {
 @Composable
 private fun SceneImageCard(scene: SceneChoice, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
+    val imageContext = LocalContext.current.applicationContext
+    val sceneBitmap by produceState<ImageBitmap?>(null, scene.image) {
+        value = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeResource(imageContext.resources, scene.image)?.asImageBitmap()
+        }
+    }
     Box(
         Modifier.fillMaxWidth().height(152.dp).clip(shape)
             .border(1.dp, if (selected) Color.White.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.26f), shape)
             .clickable(onClick = onClick)
     ) {
-        Image(painterResource(scene.image), scene.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (sceneBitmap != null) {
+            Image(sceneBitmap!!, scene.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(Modifier.fillMaxSize().background(Color(0xFF111218)))
+        }
         Box(
             Modifier.fillMaxWidth().height(72.dp).align(Alignment.BottomCenter)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))))
