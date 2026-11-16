@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
+    companion object { const val EXTRA_START_SMART_TEMPO = "start_smart_tempo_from_tile" }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -43,7 +44,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 LiquidGlassTheme(background = Color(0xFF05060B), renderScale = 0.7f) {
-                    Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App() }
+                    Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Color.White) { App(autoStartSmartTempo = intent.getBooleanExtra(EXTRA_START_SMART_TEMPO, false)) }
                 }
             }
         }

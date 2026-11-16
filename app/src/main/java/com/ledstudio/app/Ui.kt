@@ -74,10 +74,10 @@ class Ctl(ctx: Context) {
 }
 
 @Composable
-fun App() {
+fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
     val ctx = LocalContext.current
     val c = remember { Ctl(ctx) }
-    var tab by remember { mutableStateOf(0) }
+    var tab by remember { mutableStateOf(initialTab.coerceIn(0, 3)) }
     var previousTab by remember { mutableIntStateOf(tab) }
     var displayedTab by remember { mutableIntStateOf(tab) }
     val pageAlpha = remember { Animatable(1f) }
@@ -132,6 +132,12 @@ fun App() {
     c.go = { mode, st ->
         stopAll(ctx); c.pending = mode; c.style = st
         cap.launch(ctx.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
+    }
+    LaunchedEffect(autoStartSmartTempo) {
+        if (autoStartSmartTempo) {
+            c.active = "m2"
+            c.go("music", 2)
+        }
     }
 
     CompositionLocalProvider(LocalAccent provides accent) {

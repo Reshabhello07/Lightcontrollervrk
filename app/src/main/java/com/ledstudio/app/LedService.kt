@@ -35,6 +35,7 @@ class LedService : Service() {
         projectionCallback = callback
         mp = p
         running = true; style = if (i.getStringExtra("mode") == "screen") -1 else i.getIntExtra("style", 0)
+        refreshQuickSettingsTiles(this)
         if (i.getStringExtra("mode") == "screen") {
             val dm = resources.displayMetrics
             val w = dm.widthPixels / 10; val h = dm.heightPixels / 10
@@ -58,6 +59,7 @@ class LedService : Service() {
         running = false
         style = -1
         Engine.stop()
+        refreshQuickSettingsTiles(this)
         vd?.release()
         vd = null
         mp?.let { projection ->
