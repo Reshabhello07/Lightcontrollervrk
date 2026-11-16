@@ -78,7 +78,7 @@ class Ctl(ctx: Context) {
     var sens by mutableStateOf(1f)
     var smooth by mutableStateOf(0.9f)
     var useCover by mutableStateOf(true)
-    var pix by mutableStateOf(ctx.getSharedPreferences("led", 0).getInt("pixels", 200).toFloat())
+    var pix by mutableStateOf(ctx.getSharedPreferences("led", 0).getInt("pixels", 200).coerceIn(1, 200).toFloat())
     var selectedScene by mutableStateOf("")
     var active by mutableStateOf("")          // which music mode button is lit
     var pending = "music"
@@ -91,7 +91,7 @@ class Ctl(ctx: Context) {
 fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
     val ctx = LocalContext.current
     val c = remember { Ctl(ctx) }
-    var tab by remember { mutableStateOf(initialTab.coerceIn(0, 3)) }
+    var tab by remember { mutableStateOf(initialTab.coerceIn(0, 2)) }
     var previousTab by remember { mutableIntStateOf(tab) }
     var displayedTab by remember { mutableIntStateOf(tab) }
     val pageAlpha = remember { Animatable(1f) }
@@ -157,7 +157,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                 val (wallpaper, scrim) = when (page) {
                     0 -> R.drawable.led1 to 0.58f
                     1 -> R.drawable.led2 to 0.34f
-                    2 -> R.drawable.led3 to 0.78f
+                    2 -> R.drawable.led4 to 0.78f
                     else -> R.drawable.led4 to 0.78f
                 }
                 val wallpaperContext = LocalContext.current.applicationContext
@@ -197,7 +197,6 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                     when (displayedTab) {
                         0 -> MusicTab(c)
                         1 -> CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = ShireFontFamily)) { ScenesTab(c) }
-                        2 -> SyncTab(c)
                         else -> SettingsTab(c, onConnect = { perm.launch(perms()) })
                     }
                 }
@@ -206,7 +205,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
             Canvas(Modifier.fillMaxSize()) {
                 val progress = morph.value
                 if (progress < 1f && navSize.width > 0 && pageSize.height > 0) {
-                    val itemWidth = navSize.width / 4f
+                    val itemWidth = navSize.width / 3f
                     val start = Offset(navOrigin.x + itemWidth * (tab + 0.5f), navOrigin.y + 5.dp.toPx())
                     val end = Offset(pageOrigin.x + 30.dp.toPx(), pageOrigin.y + 24.dp.toPx())
                     val lift = (start.y - end.y).coerceAtLeast(1f)
@@ -437,7 +436,13 @@ private fun VerticalGlassControl(
 ) {
     val change by rememberUpdatedState(onValueChange)
     val finish by rememberUpdatedState(onFinish)
-    val fraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+    val targetFraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+    val fraction by androidx.compose.animation.core.animateFloatAsState(
+        targetFraction,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 520f),
+        label = "vertical-glass-thumb"
+    )
+    var dragging by remember { mutableStateOf(false) }
     val railBrush = if (hueControl) {
         Brush.verticalGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))
     } else {
@@ -466,7 +471,11 @@ private fun VerticalGlassControl(
                         val f = (1f - y / size.height).coerceIn(0f, 1f)
                         change(range.start + f * (range.endInclusive - range.start))
                     }
-                    detectDragGestures(onDragStart = { update(it.y) }, onDragEnd = { finish() }) { input, _ ->
+                    detectDragGestures(
+                        onDragStart = { dragging = true; update(it.y) },
+                        onDragEnd = { dragging = false; finish() },
+                        onDragCancel = { dragging = false }
+                    ) { input, _ ->
                         input.consume()
                         update(input.position.y)
                     }
@@ -484,33 +493,24 @@ private fun VerticalGlassControl(
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
                 )
                 val y = top + (1f - fraction) * railHeight
-                drawCircle(Color.White.copy(alpha = 0.20f), radius = 15.dp.toPx(), center = Offset(x, y))
-                drawCircle(Color.White.copy(alpha = 0.96f), radius = 10.dp.toPx(), center = Offset(x, y))
-                val thumb = if (hueControl) Color(android.graphics.Color.HSVToColor(floatArrayOf(value, 1f, 1f))) else Color(0xFFE7E5EF)
-                drawCircle(thumb, radius = 7.dp.toPx(), center = Offset(x, y))
+                val bubbleRadius = (if (dragging) 17.dp else 14.dp).toPx()
+                val tint = if (hueControl) Color(android.graphics.Color.HSVToColor(floatArrayOf(value, 0.62f, 1f))) else Color.White
+                drawCircle(tint.copy(alpha = 0.20f), radius = bubbleRadius + 7.dp.toPx(), center = Offset(x, y))
+                drawCircle(
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.84f), tint.copy(alpha = 0.46f), Color(0xFFB9C7E8).copy(alpha = 0.55f)),
+                        startY = y - bubbleRadius, endY = y + bubbleRadius
+                    ),
+                    radius = bubbleRadius, center = Offset(x, y)
+                )
+                drawCircle(Color.White.copy(alpha = 0.88f), radius = bubbleRadius, center = Offset(x, y), style = Stroke(width = 1.2.dp.toPx()))
+                drawOval(Color.White.copy(alpha = 0.65f), topLeft = Offset(x - bubbleRadius * 0.48f, y - bubbleRadius * 0.58f), size = androidx.compose.ui.geometry.Size(bubbleRadius * 0.62f, bubbleRadius * 0.28f))
             }
         }
         Text(valueLabel, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.84f), maxLines = 1)
     }
 }
 
-@Composable
-private fun SyncTab(c: Ctl) {
-    val ctx = LocalContext.current
-    TabColumn {
-        GlassCard {
-            Label("Notifications")
-            SwitchRow("Pulse on notifications", Engine.notifOn.value) { Engine.notifOn.value = it }
-            GlassButton("Grant notification access") { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-        }
-        GlassCard {
-            Label("Phone events")
-            SwitchRow("Call ring (own color per contact)", Extras.callOn.value) { Extras.callOn.value = it }
-            SwitchRow("Battery alerts", Extras.battOn.value) { Extras.battOn.value = it }
-            GlassButton("Show battery level") { Extras.showBattery(ctx) }
-        }
-    }
-}
 @Composable
 private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
     val ctx = LocalContext.current
@@ -524,9 +524,20 @@ private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
             }
         }
         GlassCard {
+            Label("Alerts & events")
+            SwitchRow("Pulse on notifications", Engine.notifOn.value) { Engine.notifOn.value = it }
+            GlassButton("Grant notification access") { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+            Spacer(Modifier.height(8.dp))
+            SwitchRow("Call ring (own color per contact)", Extras.callOn.value) { Extras.callOn.value = it }
+            SwitchRow("Battery alerts", Extras.battOn.value) { Extras.battOn.value = it }
+            GlassButton("Show battery level") { Extras.showBattery(ctx) }
+        }
+        GlassCard {
             Label("LED strip")
-            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..255f, step = 1f, onChange = { c.pix = it }, onFinish = { savePixelCount(ctx, c.pix.roundToInt()) })
-            GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
+            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..200f, step = 1f,
+                onChange = { c.pix = it.coerceIn(1f, 200f) },
+                onFinish = { c.pix = c.pix.coerceIn(1f, 200f); savePixelCount(ctx, c.pix.roundToInt()) })
+            GlassButton("Apply pixel count") { c.pix = c.pix.coerceIn(1f, 200f); savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
         }
     }
 }

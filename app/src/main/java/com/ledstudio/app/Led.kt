@@ -186,7 +186,7 @@ object Led {
         }
         override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
             chr = g.getService(SVC)?.getCharacteristic(CHR)
-            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; keepAlive(); if (pixelConfigGatt !== g) { pixelConfigGatt = g; setPixels(appCtx?.getSharedPreferences("led", 0)?.getInt("pixels", 200) ?: 200); scope.launch { delay(120); if (gatt === g) startRender() } } else startRender() }
+            if (chr != null) { wasUp = true; retries = 0; status.value = "Connected"; lastSent = -1; busy = false; keepAlive(); if (pixelConfigGatt !== g) { pixelConfigGatt = g; setPixels(appCtx?.getSharedPreferences("led", 0)?.getInt("pixels", 200)?.coerceIn(1, 200) ?: 200); scope.launch { delay(120); if (gatt === g) startRender() } } else startRender() }
             else status.value = "Strip service not found"
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, s: Int) { busy = false }
@@ -213,5 +213,5 @@ object Led {
         scope.launch { repeat(10) { if (writeBytes(b)) return@launch; delay(30) } }
     }
     fun effect(id: Int) { paused = true; raw(0x7B, 0xFF, 0x03, id, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF) }
-    fun setPixels(n: Int) = raw(0x7B, 0xFF, 0x05, 0x04, 0x00, n.coerceIn(1, 255), 0x03, 0xFF, 0xBF)
+    fun setPixels(n: Int) = raw(0x7B, 0xFF, 0x05, 0x04, 0x00, n.coerceIn(1, 200), 0x03, 0xFF, 0xBF)
 }

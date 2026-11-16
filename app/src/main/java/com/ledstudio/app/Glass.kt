@@ -141,6 +141,12 @@ fun GlassSlider(
     var wPx by remember { mutableStateOf(1f) }
     var drag by remember { mutableStateOf(false) }
     val thumbDp by animateFloatAsState(if (drag) 38f else 28f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumb")
+    val targetFraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+    val sliderFraction by animateFloatAsState(
+        targetFraction,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 560f),
+        label = "glass-slider-position"
+    )
     val maxThumbPx = with(dens) { 38.dp.toPx() }
     fun setFromX(x: Float) {
         val usable = (wPx - maxThumbPx).coerceAtLeast(1f)
@@ -163,9 +169,8 @@ fun GlassSlider(
         }
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val frac = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
             val r = maxThumbPx / 2f
-            val cx = r + frac * (size.width - 2f * r)
+            val cx = r + sliderFraction * (size.width - 2f * r)
             val cy = size.height / 2f
             val th = 8.dp.toPx()
             val corner = CornerRadius(th / 2f, th / 2f)
@@ -179,11 +184,21 @@ fun GlassSlider(
                     Offset(0f, trackTop), Size(cx.coerceAtLeast(0f), th), corner)
             }
             val d = thumbDp.dp.toPx()
-            if (drag) drawCircle(accent.copy(alpha = 0.28f), radius = d / 2f + 7.dp.toPx(), center = Offset(cx, cy))
-            drawCircle(Color.Black.copy(alpha = 0.30f), radius = d / 2f + 1.5.dp.toPx(), center = Offset(cx, cy + 2.dp.toPx()))
-            drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.99f), Color(0xFFD9DAEE)), startY = cy - d / 2f, endY = cy + d / 2f),
-                radius = d / 2f, center = Offset(cx, cy))
-            drawCircle(Color.White, radius = d / 2f, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
+            drawCircle(accent.copy(alpha = if (drag) 0.28f else 0.15f), radius = d / 2f + 8.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(Color.Black.copy(alpha = 0.28f), radius = d / 2f + 1.5.dp.toPx(), center = Offset(cx, cy + 2.dp.toPx()))
+            drawCircle(
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.90f), Color(0xFFE7E8F5).copy(alpha = 0.72f), accent.copy(alpha = 0.34f)),
+                    startY = cy - d / 2f, endY = cy + d / 2f
+                ),
+                radius = d / 2f, center = Offset(cx, cy)
+            )
+            drawCircle(Color.White.copy(alpha = 0.92f), radius = d / 2f, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
+            drawOval(
+                Color.White.copy(alpha = 0.72f),
+                topLeft = Offset(cx - d * 0.24f, cy - d * 0.30f),
+                size = Size(d * 0.42f, d * 0.19f)
+            )
         }
     }
 }
@@ -219,7 +234,7 @@ fun Body(t: String, alpha: Float = 0.8f) = Text(t, fontSize = 15.sp, color = Col
 
 @Composable
 fun GlassTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val items = listOf("♪" to "Music", "✦" to "Scenes", "!" to "Alerts", "⚙" to "Settings")
+    val items = listOf("♪" to "Music", "✦" to "Scenes", "⚙" to "Settings")
     LiquidGlassTabBar(
         itemCount = items.size,
         selectedIndex = selected,

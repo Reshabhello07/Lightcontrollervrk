@@ -59,6 +59,6 @@ fun perms(): Array<String> {
 }
 
 fun savePixelCount(c: Context, pixels: Int) {
-    c.getSharedPreferences("led", 0).edit().putInt("pixels", pixels.coerceIn(1, 255)).apply()
+    c.getSharedPreferences("led", 0).edit().putInt("pixels", pixels.coerceIn(1, 200)).apply()
 }
 fun stopAll(ctx: Context, afterglow: Boolean = true) { Engine.stop(afterglow); ctx.stopService(Intent(ctx, LedService::class.java)) }
