@@ -66,3 +66,4 @@ object Extras {
         val l = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         if (l >= 0) Led.pulse(Led.hsv(l * 1.2f), 3000)   // red (empty) -> green (full)
     }
+}

@@ -324,3 +324,89 @@ private fun SyncTab(c: Ctl) {
         }
     }
 }
+@Composable
+private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
+    val ctx = LocalContext.current
+    TabColumn {
+        GlassCard {
+            Label("Connection")
+            Body(Led.status.value, 0.85f)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassButton("Connect", primary = true, onClick = onConnect)
+                GlassButton("Disconnect") { stopAll(ctx, afterglow = false); c.active = ""; Led.disconnect() }
+            }
+        }
+        GlassCard {
+            Label("LED strip")
+            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..255f, step = 1f, onChange = { c.pix = it }, onFinish = { savePixelCount(ctx, c.pix.roundToInt()) })
+            GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
+        }
+    }
+}
+@Composable
+private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) {
+    val accent = LocalAccent.current
+    val shape = RoundedCornerShape(50)
+    BasicTextField(
+        value = value, onValueChange = onChange, singleLine = true,
+        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+        cursorBrush = SolidColor(accent),
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxWidth().glassEffect(Glass.Regular, shape).clip(shape).background(Color.White.copy(alpha = 0.08f))
+                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f))), shape)
+                .padding(horizontal = 18.dp, vertical = 12.dp)) {
+                if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = Color.White.copy(alpha = 0.40f))
+                inner()
+            }
+        }
+    )
+}
+
+@Composable
+private fun ColorReactor(c: Ctl, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val ripple = remember { Animatable(1f) }
+    Box(modifier.pointerInput(c) {
+        var brightnessGesture = false
+        detectDragGestures(
+            onDragStart = { down ->
+                val center = Offset(size.width / 2f, size.height / 2f)
+                brightnessGesture = (down - center).getDistance() < minOf(size.width, size.height) * 0.24f
+                stopAll(ctx, afterglow = false)
+                c.active = ""
+            },
+            onDragEnd = {
+                scope.launch { ripple.snapTo(0f); ripple.animateTo(1f, tween(520)) }
+            }
+        ) { change, _ ->
+            change.consume()
+            if (brightnessGesture) {
+                Led.bright.value = (1f - change.position.y / size.height).coerceIn(0.05f, 1f)
+            } else {
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val angle = atan2(change.position.y - center.y, change.position.x - center.x) * 180f / PI.toFloat()
+                c.hue = (angle + 360f) % 360f
+                Led.fadeTo(Led.hsv(c.hue), 45, force = true)
+            }
+        }
+    }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.minDimension
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val selected = Color(Led.hsv(c.hue))
+            val wheel = listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
+            drawCircle(Brush.sweepGradient(wheel, center), radius = s * 0.45f, center = center, style = Stroke(width = 13.dp.toPx()))
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.92f), selected, Color.Black.copy(alpha = 0.78f)), center = center, radius = s * 0.35f),
+                radius = s * 0.34f,
+                center = center
+            )
+            if (ripple.value < 1f) {
+                drawCircle(selected.copy(alpha = 1f - ripple.value), radius = s * (0.26f + 0.16f * ripple.value), center = center, style = Stroke(width = 2.dp.toPx()))
+            }
+            drawCircle(Color.White.copy(alpha = 0.52f), radius = s * 0.045f, center = Offset(center.x - s * 0.12f, center.y - s * 0.14f))
+        }
+        Text("${(Led.bright.value * 100).roundToInt()}%", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
