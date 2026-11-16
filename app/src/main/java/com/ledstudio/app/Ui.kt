@@ -13,7 +13,10 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -30,7 +33,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -51,11 +53,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -79,12 +79,10 @@ class Ctl(ctx: Context) {
     var smooth by mutableStateOf(0.9f)
     var useCover by mutableStateOf(true)
     var pix by mutableStateOf(ctx.getSharedPreferences("led", 0).getInt("pixels", 200).toFloat())
-    var fxName by mutableStateOf("")
     var selectedScene by mutableStateOf("")
     var active by mutableStateOf("")          // which music mode button is lit
     var pending = "music"
     var style = 0
-    val favs = mutableStateMapOf<Int, String>().apply { putAll(loadFavs(ctx)) }
     var go: (String, Int) -> Unit = { _, _ -> }
     fun playFx(ctx: Context, id: Int) { stopAll(ctx, afterglow = false); active = ""; Engine.fx.value = id; Led.effect(id) }
 }
@@ -270,6 +268,7 @@ private fun TabColumn(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun MusicTab(c: Ctl) {
+    val ctx = LocalContext.current
     TabColumn {
         GlassCard {
             Label("Music · phone audio, no mic")
@@ -278,6 +277,11 @@ private fun MusicTab(c: Ctl) {
                 GlassButton("Smart tempo", primary = c.active == "m2") { c.active = "m2"; c.go("music", 2) }
             }
             if (Engine.bpm.value > 0) Body("♪  ${Engine.bpm.value} BPM", 0.7f)
+        }
+        GlassCard {
+            Label("Screen sync")
+            Body("Mirrors the colors on your screen onto the strip.", 0.65f)
+            GlassButton("Turn on screen sync", primary = c.active == "screen") { c.active = "screen"; c.go("screen", 0) }
         }
     }
 }
@@ -292,101 +296,92 @@ private val sceneChoices = listOf(
 @Composable
 private fun ScenesTab(c: Ctl) {
     val ctx = LocalContext.current
+    var showSceneChooser by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
+    var showBuiltIn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        showSceneChooser = true
+        delay(190)
+        showSpeed = true
+        delay(190)
+        showBuiltIn = true
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Label("Choose a scene")
-        Row(Modifier.fillMaxWidth().height(476.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            VerticalGlassControl(
-                label = "COLOR", value = c.hue, range = 0f..360f, hueControl = true,
-                valueLabel = "${c.hue.roundToInt()}°", modifier = Modifier.width(50.dp).fillMaxHeight(),
-                onValueChange = { c.hue = it; Led.fadeTo(Led.hsv(it), 60, force = true) },
-                onFinish = {
-                    stopAll(ctx, afterglow = false)
-                    c.active = ""
-                    Led.fadeTo(Led.hsv(c.hue), 120)
-                }
-            )
-            LazyColumn(
-                Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(sceneChoices, key = { it.title }) { scene ->
-                    SceneImageCard(scene, c.selectedScene == scene.title) {
-                        c.selectedScene = scene.title
-                        stopAll(ctx)
-                        c.active = ""
-                        Engine.scene(scene.effect)
+        AnimatedVisibility(
+            visible = showSceneChooser,
+            enter = fadeIn(tween(170)) + slideInVertically(tween(170)) { it / 18 }
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label("Choose a scene")
+                Row(Modifier.fillMaxWidth().height(476.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VerticalGlassControl(
+                        label = "COLOR", value = c.hue, range = 0f..360f, hueControl = true,
+                        valueLabel = "${c.hue.roundToInt()}°", modifier = Modifier.width(50.dp).fillMaxHeight(),
+                        onValueChange = { c.hue = it; Led.fadeTo(Led.hsv(it), 60, force = true) },
+                        onFinish = {
+                            stopAll(ctx, afterglow = false)
+                            c.active = ""
+                            Led.fadeTo(Led.hsv(c.hue), 120)
+                        }
+                    )
+                    LazyColumn(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(sceneChoices, key = { it.title }) { scene ->
+                            SceneImageCard(scene, c.selectedScene == scene.title) {
+                                c.selectedScene = scene.title
+                                stopAll(ctx)
+                                c.active = ""
+                                Engine.scene(scene.effect)
+                            }
+                        }
                     }
-                }
-            }
-            VerticalGlassControl(
-                label = "BRIGHT", value = Led.bright.value, range = 0.05f..1f, hueControl = false,
-                valueLabel = "${(Led.bright.value * 100).roundToInt()}%", modifier = Modifier.width(50.dp).fillMaxHeight(),
-                onValueChange = { Led.bright.value = it }
-            )
-        }
-        GlassCard(pad = 14.dp) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Label("Effect speed")
-                Spacer(Modifier.weight(1f))
-                Body("${c.spd.roundToInt()}×", 0.8f)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1f, 2f, 3f, 4f).forEach { speed ->
-                    GlassButton("${speed.toInt()}×", modifier = Modifier.weight(1f), primary = c.spd == speed) {
-                        c.spd = speed
-                        Engine.speed = speed
-                    }
+                    VerticalGlassControl(
+                        label = "BRIGHT", value = Led.bright.value, range = 0.05f..1f, hueControl = false,
+                        valueLabel = "${(Led.bright.value * 100).roundToInt()}%", modifier = Modifier.width(50.dp).fillMaxHeight(),
+                        onValueChange = { Led.bright.value = it }
+                    )
                 }
             }
         }
-        GlassCard {
-            Label("More scenes")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Thunderstorm" to "thunder", "Ocean" to "ocean").forEach { (name, effect) ->
-                    GlassButton(name) {
-                        c.selectedScene = name
-                        stopAll(ctx)
-                        c.active = ""
-                        Engine.scene(effect)
-                    }
-                }
-            }
-        }
-        GlassCard {
-            Label("Built-in effects")
-            val id = Engine.fx.value
-            Text("Effect #$id" + (c.favs[id]?.let { " · $it" } ?: ""), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            GlassSlider(id.toFloat(), { Engine.fx.value = it.roundToInt() }, 1f..210f, step = 1f, onFinish = { c.playFx(ctx, Engine.fx.value) })
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Prev") { c.playFx(ctx, (Engine.fx.value - 2).mod(210) + 1) }
-                GlassButton("Next") { c.playFx(ctx, Engine.fx.value.mod(210) + 1) }
-                GlassButton("Auto-browse") { stopAll(ctx); c.active = ""; Engine.cycle(1, 210, 4) }
-            }
-            GlassField(c.fxName, { c.fxName = it }, "Name this effect")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Save favorite", primary = true) {
-                    c.favs[Engine.fx.value] = c.fxName.ifBlank { "Effect ${Engine.fx.value}" }; saveFavs(ctx, c.favs); c.fxName = ""
-                }
-                if (c.favs.containsKey(Engine.fx.value)) GlassButton("Remove") { c.favs.remove(Engine.fx.value); saveFavs(ctx, c.favs) }
-            }
-            c.favs.toSortedMap().forEach { (fid, name) ->
+        AnimatedVisibility(
+            visible = showSpeed,
+            enter = fadeIn(tween(170)) + slideInVertically(tween(170)) { it / 18 }
+        ) {
+            GlassCard(pad = 14.dp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Body("$name  (#$fid)", 0.9f)
+                    Label("Effect speed")
                     Spacer(Modifier.weight(1f))
-                    GlassButton("Play") { c.playFx(ctx, fid) }
+                    Body("${c.spd.roundToInt()}×", 0.8f)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1f, 2f, 3f, 4f).forEach { speed ->
+                        GlassButton("${speed.toInt()}×", modifier = Modifier.weight(1f), primary = c.spd == speed) {
+                            c.spd = speed
+                            Engine.speed = speed
+                        }
+                    }
                 }
             }
         }
-        GlassCard {
-            Label("Effect presets")
-            PRESETS.filterNot { it.name == "Breathing" }.forEach { effect ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Body(effect.name, 0.9f)
-                    Spacer(Modifier.weight(1f))
-                    GlassButton("Play") { stopAll(ctx); c.active = ""; Engine.play(effect) }
+        AnimatedVisibility(
+            visible = showBuiltIn,
+            enter = fadeIn(tween(170)) + slideInVertically(tween(170)) { it / 18 }
+        ) {
+            GlassCard {
+                Label("Built-in effects")
+                val id = Engine.fx.value
+                Text("Effect #$id", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                GlassSlider(id.toFloat(), { Engine.fx.value = it.roundToInt() }, 1f..210f, step = 1f, onFinish = { c.playFx(ctx, Engine.fx.value) })
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassButton("Prev") { c.playFx(ctx, (Engine.fx.value - 2).mod(210) + 1) }
+                    GlassButton("Next") { c.playFx(ctx, Engine.fx.value.mod(210) + 1) }
+                    GlassButton("Auto-browse") { stopAll(ctx); c.active = ""; Engine.cycle(1, 210, 4) }
                 }
             }
         }
@@ -504,11 +499,6 @@ private fun SyncTab(c: Ctl) {
     val ctx = LocalContext.current
     TabColumn {
         GlassCard {
-            Label("Screen sync")
-            Body("Mirrors the colors on your screen onto the strip.", 0.65f)
-            GlassButton("Turn on screen sync", primary = c.active == "screen") { c.active = "screen"; c.go("screen", 0) }
-        }
-        GlassCard {
             Label("Notifications")
             SwitchRow("Pulse on notifications", Engine.notifOn.value) { Engine.notifOn.value = it }
             GlassButton("Grant notification access") { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
@@ -539,22 +529,4 @@ private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
             GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
         }
     }
-}
-@Composable
-private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) {
-    val accent = LocalAccent.current
-    val shape = RoundedCornerShape(50)
-    BasicTextField(
-        value = value, onValueChange = onChange, singleLine = true,
-        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-        cursorBrush = SolidColor(accent),
-        decorationBox = { inner ->
-            Box(Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.08f))
-                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f))), shape)
-                .padding(horizontal = 18.dp, vertical = 12.dp)) {
-                if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = Color.White.copy(alpha = 0.40f))
-                inner()
-            }
-        }
-    )
 }

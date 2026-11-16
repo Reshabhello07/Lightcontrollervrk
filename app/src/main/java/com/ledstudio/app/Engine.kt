@@ -20,9 +20,6 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-data class Step(val c: Int, val hold: Int, val fade: Int)
-data class Effect(val name: String, val steps: List<Step>)
-
 val NOTIF_COLORS = mapOf(
     "com.whatsapp" to 0xFF25D366.toInt(), "com.whatsapp.w4b" to 0xFF25D366.toInt(),
     "com.discord" to 0xFF5865F2.toInt(), "com.instagram.android" to 0xFFE1306C.toInt(),
@@ -48,13 +45,6 @@ class CoverService : NotificationListenerService() {
         if (s.notification.category == Notification.CATEGORY_CALL) Extras.ringStop()
     }
 }
-
-val PRESETS = listOf(
-    Effect("Breathing", listOf(Step(0xFFFF3D00.toInt(), 300, 2000), Step(Color.BLACK, 300, 2000))),
-    Effect("Rainbow", listOf(0f, 60f, 120f, 180f, 240f, 300f).map { Step(Led.hsv(it), 0, 1500) }),
-    Effect("Fire", listOf(Step(0xFFFF2200.toInt(), 100, 400), Step(0xFFFF8800.toInt(), 100, 400), Step(0xFFFFCC00.toInt(), 50, 300))),
-    Effect("Sunset", listOf(Step(0xFFFF5E00.toInt(), 1500, 3500), Step(0xFFFF0066.toInt(), 1500, 3500), Step(0xFF5500FF.toInt(), 1500, 3500)))
-)
 
 object Cover {
     var cols: List<Int> = listOf(Color.WHITE)
@@ -150,14 +140,6 @@ object Engine {
 
     private fun hsvC(h: Float, s: Float, v: Float) = Color.HSVToColor(floatArrayOf(h, s, v.coerceIn(0f, 1f)))
     private fun rot(c: Int, d: Float): Int { val h = FloatArray(3); Color.colorToHSV(c, h); h[0] = (h[0] + d) % 360f; return Color.HSVToColor(h) }
-
-    fun play(e: Effect) = run("preset") {
-        while (isActive) for (s in e.steps) {
-            val f = (s.fade / speed).toLong()
-            Led.fadeTo(s.c, f, true)
-            delay(maxOf(20L, f + (s.hold / speed).toLong()))
-        }
-    }
 
     fun cover() = run("cover") {
         var i = 0

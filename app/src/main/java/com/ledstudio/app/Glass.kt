@@ -219,7 +219,7 @@ fun Body(t: String, alpha: Float = 0.8f) = Text(t, fontSize = 15.sp, color = Col
 
 @Composable
 fun GlassTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val items = listOf("♪" to "Music", "✦" to "Scenes", "⇄" to "Sync", "⚙" to "Settings")
+    val items = listOf("♪" to "Music", "✦" to "Scenes", "!" to "Alerts", "⚙" to "Settings")
     LiquidGlassTabBar(
         itemCount = items.size,
         selectedIndex = selected,

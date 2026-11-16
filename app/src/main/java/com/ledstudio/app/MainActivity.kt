@@ -16,7 +16,6 @@ import androidx.compose.material3.darkColorScheme
 import com.wexpa.liquidglass.LiquidGlassTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     companion object { const val EXTRA_START_SMART_TEMPO = "start_smart_tempo_from_tile" }
@@ -59,16 +58,7 @@ fun perms(): Array<String> {
     return l.toTypedArray()
 }
 
-fun loadFavs(c: Context): Map<Int, String> {
-    val o = JSONObject(c.getSharedPreferences("fx", 0).getString("f", "{}") ?: "{}")
-    return o.keys().asSequence().associate { it.toInt() to o.getString(it) }
-}
 fun savePixelCount(c: Context, pixels: Int) {
     c.getSharedPreferences("led", 0).edit().putInt("pixels", pixels.coerceIn(1, 255)).apply()
 }
-fun saveFavs(c: Context, m: Map<Int, String>) {
-    val o = JSONObject(); m.forEach { (k, v) -> o.put(k.toString(), v) }
-    c.getSharedPreferences("fx", 0).edit().putString("f", o.toString()).apply()
-}
-
 fun stopAll(ctx: Context, afterglow: Boolean = true) { Engine.stop(afterglow); ctx.stopService(Intent(ctx, LedService::class.java)) }
