@@ -32,8 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Modifier
@@ -55,8 +53,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.math.atan2
-import kotlin.math.PI
 import kotlin.math.roundToInt
 
 /** All UI state that the tabs share. */
@@ -266,17 +262,6 @@ private fun MusicTab(c: Ctl) {
 private fun ScenesTab(c: Ctl) {
     val ctx = LocalContext.current
     TabColumn {
-        GlassCard(strong = true) {
-            Label("Color Reactor")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("${c.hue.roundToInt()}°", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    Body("Drag the outer ring to turn the color. Pull from the center to raise or lower brightness.", 0.65f)
-                    Body("Flick to send a glassy ripple.", 0.5f)
-                }
-                ColorReactor(c, Modifier.size(176.dp))
-            }
-        }
         GlassCard {
             Label("Color")
             SliderRow("Hue", "${c.hue.roundToInt()}°", c.hue, 0f..360f, rainbow = true,
@@ -387,53 +372,4 @@ private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) 
             }
         }
     )
-}
-
-@Composable
-private fun ColorReactor(c: Ctl, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val ripple = remember { Animatable(1f) }
-    Box(modifier.pointerInput(c) {
-        var brightnessGesture = false
-        detectDragGestures(
-            onDragStart = { down ->
-                val center = Offset(size.width / 2f, size.height / 2f)
-                brightnessGesture = (down - center).getDistance() < minOf(size.width, size.height) * 0.24f
-                stopAll(ctx, afterglow = false)
-                c.active = ""
-            },
-            onDragEnd = {
-                scope.launch { ripple.snapTo(0f); ripple.animateTo(1f, tween(520)) }
-            }
-        ) { change, _ ->
-            change.consume()
-            if (brightnessGesture) {
-                Led.bright.value = (1f - change.position.y / size.height).coerceIn(0.05f, 1f)
-            } else {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val angle = atan2(change.position.y - center.y, change.position.x - center.x) * 180f / PI.toFloat()
-                c.hue = (angle + 360f) % 360f
-                Led.fadeTo(Led.hsv(c.hue), 45, force = true)
-            }
-        }
-    }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val s = size.minDimension
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val selected = Color(Led.hsv(c.hue))
-            val wheel = listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
-            drawCircle(Brush.sweepGradient(wheel, center), radius = s * 0.45f, center = center, style = Stroke(width = 13.dp.toPx()))
-            drawCircle(
-                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.92f), selected, Color.Black.copy(alpha = 0.78f)), center = center, radius = s * 0.35f),
-                radius = s * 0.34f,
-                center = center
-            )
-            if (ripple.value < 1f) {
-                drawCircle(selected.copy(alpha = 1f - ripple.value), radius = s * (0.26f + 0.16f * ripple.value), center = center, style = Stroke(width = 2.dp.toPx()))
-            }
-            drawCircle(Color.White.copy(alpha = 0.52f), radius = s * 0.045f, center = Offset(center.x - s * 0.12f, center.y - s * 0.14f))
-        }
-        Text("${(Led.bright.value * 100).roundToInt()}%", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
-    }
 }
