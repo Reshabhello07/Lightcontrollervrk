@@ -139,8 +139,8 @@ fun App() {
                         targetState = tab,
                         transitionSpec = {
                             val direction = if (targetState > initialState) 1 else -1
-                            (fadeIn(tween(240)) + slideInHorizontally(tween(260)) { direction * it / 10 } + scaleIn(initialScale = 0.985f, animationSpec = tween(240))) togetherWith
-                                (fadeOut(tween(170)) + slideOutHorizontally(tween(190)) { -direction * it / 16 } + scaleOut(targetScale = 0.99f, animationSpec = tween(170)))
+                            (fadeIn(tween(300, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { direction * it / 2 } + scaleIn(initialScale = 0.97f, animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+                                (fadeOut(tween(220, easing = FastOutSlowInEasing)) + slideOutHorizontally(tween(280, easing = FastOutSlowInEasing)) { -direction * it / 4 } + scaleOut(targetScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing)))
                         },
                         label = "tab"
                     ) { page ->
