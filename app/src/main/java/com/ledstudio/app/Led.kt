@@ -114,6 +114,7 @@ object Led {
             closeGatt(); lastSent = -1
             appCtx?.let { try { it.stopService(Intent(it, KeepAliveService::class.java)) } catch (e: Exception) { } }
             status.value = "Disconnected (off)"
+            appCtx?.let(::refreshQuickSettingsTiles)
         }
     }
 
