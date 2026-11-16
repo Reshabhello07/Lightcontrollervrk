@@ -145,12 +145,23 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
                     2 -> R.drawable.led3 to 0.78f
                     else -> R.drawable.led4 to 0.78f
                 }
+                val wallpaperPainter = painterResource(wallpaper)
                 Box(Modifier.fillMaxSize()) {
                     Image(
-                        painter = painterResource(wallpaper),
+                        painter = wallpaperPainter,
                         contentDescription = null,
-                        contentScale = ContentScale.FillBounds,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
+                    )
+                    Image(
+                        painter = wallpaperPainter,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            scaleX = 1.16f
+                            scaleY = 1.16f
+                            alpha = 0.36f
+                        }.blur(42.dp)
                     )
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
                 }
