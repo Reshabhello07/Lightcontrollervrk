@@ -178,7 +178,12 @@ object Engine {
     // ---- Cinematic scenes ----
     private fun scene(f: (Float) -> Int) = run("scene") {
         val t0 = System.nanoTime()
-        while (isActive) { Led.fadeTo(f((System.nanoTime() - t0) / 1e9f), 70); delay(40) }
+        while (isActive) {
+            val rate = speed.coerceIn(0.25f, 4f)
+            val elapsed = (System.nanoTime() - t0) / 1e9f * rate
+            Led.fadeTo(f(elapsed), (70f / rate).toLong().coerceAtLeast(18L))
+            delay(40)
+        }
     }
 
     fun scene(name: String) {

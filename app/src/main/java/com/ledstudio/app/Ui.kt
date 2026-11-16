@@ -18,6 +18,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -64,6 +67,7 @@ class Ctl(ctx: Context) {
     var useCover by mutableStateOf(true)
     var pix by mutableStateOf(ctx.getSharedPreferences("led", 0).getInt("pixels", 200).toFloat())
     var fxName by mutableStateOf("")
+    var selectedScene by mutableStateOf("")
     var active by mutableStateOf("")          // which music mode button is lit
     var pending = "music"
     var style = 0
@@ -258,21 +262,77 @@ private fun MusicTab(c: Ctl) {
         }
     }
 }
+private data class SceneChoice(val title: String, val image: Int, val effect: String)
+
+private val sceneChoices = listOf(
+    SceneChoice("Aurora", R.drawable.scene_aurora, "aurora"),
+    SceneChoice("Crimson", R.drawable.scene_crimson, "lava"),
+    SceneChoice("Warm Ambience", R.drawable.scene_warm, "candle")
+)
+
 @Composable
 private fun ScenesTab(c: Ctl) {
     val ctx = LocalContext.current
-    TabColumn {
-        GlassCard {
-            Label("Color")
-            SliderRow("Hue", "${c.hue.roundToInt()}°", c.hue, 0f..360f, rainbow = true,
-                onChange = { c.hue = it; Led.fadeTo(Led.hsv(it), 60) }, onFinish = { stopAll(ctx, afterglow = false); c.active = ""; Led.fadeTo(Led.hsv(c.hue), 120) })
-            SliderRow("Effect speed", "%.2f×".format(c.spd), c.spd, 0.25f..4f, onChange = { c.spd = it; Engine.speed = it })
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Label("Choose a scene")
+        Row(Modifier.fillMaxWidth().height(476.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            VerticalGlassControl(
+                label = "COLOR", value = c.hue, range = 0f..360f, hueControl = true,
+                valueLabel = "${c.hue.roundToInt()}°", modifier = Modifier.width(50.dp).fillMaxHeight(),
+                onValueChange = { c.hue = it; Led.fadeTo(Led.hsv(it), 60, force = true) },
+                onFinish = {
+                    stopAll(ctx, afterglow = false)
+                    c.active = ""
+                    Led.fadeTo(Led.hsv(c.hue), 120)
+                }
+            )
+            Column(
+                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                sceneChoices.forEach { scene ->
+                    SceneImageCard(scene, c.selectedScene == scene.title) {
+                        c.selectedScene = scene.title
+                        stopAll(ctx)
+                        c.active = ""
+                        Engine.scene(scene.effect)
+                    }
+                }
+            }
+            VerticalGlassControl(
+                label = "BRIGHT", value = Led.bright.value, range = 0.05f..1f, hueControl = false,
+                valueLabel = "${(Led.bright.value * 100).roundToInt()}%", modifier = Modifier.width(50.dp).fillMaxHeight(),
+                onValueChange = { Led.bright.value = it }
+            )
+        }
+        GlassCard(pad = 14.dp) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Label("Effect speed")
+                Spacer(Modifier.weight(1f))
+                Body("${c.spd.roundToInt()}×", 0.8f)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1f, 2f, 3f, 4f).forEach { speed ->
+                    GlassButton("${speed.toInt()}×", modifier = Modifier.weight(1f), primary = c.spd == speed) {
+                        c.spd = speed
+                        Engine.speed = speed
+                    }
+                }
+            }
         }
         GlassCard {
-            Label("Scenes")
+            Label("More scenes")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Thunderstorm" to "thunder", "Candle" to "candle", "Aurora" to "aurora", "Ocean" to "ocean", "Lava" to "lava").forEach { (n, k) ->
-                    GlassButton(n) { stopAll(ctx); c.active = ""; Engine.scene(k) }
+                listOf("Thunderstorm" to "thunder", "Ocean" to "ocean").forEach { (name, effect) ->
+                    GlassButton(name) {
+                        c.selectedScene = name
+                        stopAll(ctx)
+                        c.active = ""
+                        Engine.scene(effect)
+                    }
                 }
             }
         }
@@ -293,9 +353,9 @@ private fun ScenesTab(c: Ctl) {
                 }
                 if (c.favs.containsKey(Engine.fx.value)) GlassButton("Remove") { c.favs.remove(Engine.fx.value); saveFavs(ctx, c.favs) }
             }
-            c.favs.toSortedMap().forEach { (fid, n) ->
+            c.favs.toSortedMap().forEach { (fid, name) ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Body("$n  (#$fid)", 0.9f)
+                    Body("$name  (#$fid)", 0.9f)
                     Spacer(Modifier.weight(1f))
                     GlassButton("Play") { c.playFx(ctx, fid) }
                 }
@@ -303,14 +363,110 @@ private fun ScenesTab(c: Ctl) {
         }
         GlassCard {
             Label("Effect presets")
-            PRESETS.filterNot { it.name == "Breathing" }.forEach { e ->
+            PRESETS.filterNot { it.name == "Breathing" }.forEach { effect ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Body(e.name, 0.9f)
+                    Body(effect.name, 0.9f)
                     Spacer(Modifier.weight(1f))
-                    GlassButton("Play") { stopAll(ctx); c.active = ""; Engine.play(e) }
+                    GlassButton("Play") { stopAll(ctx); c.active = ""; Engine.play(effect) }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SceneImageCard(scene: SceneChoice, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(26.dp)
+    Box(
+        Modifier.fillMaxWidth().height(152.dp).clip(shape)
+            .border(1.dp, if (selected) Color.White.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.26f), shape)
+            .clickable(onClick = onClick)
+    ) {
+        Image(painterResource(scene.image), scene.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Box(
+            Modifier.fillMaxWidth().height(72.dp).align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.76f))))
+        )
+        Text(scene.title, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 14.dp),
+            fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Box(
+            Modifier.align(Alignment.TopEnd).padding(12.dp).size(28.dp).clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.38f)).border(1.dp, Color.White.copy(alpha = 0.82f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier.size(if (selected) 16.dp else 8.dp).clip(CircleShape)
+                .background(if (selected) Color(0xFFBCAEFF) else Color.White.copy(alpha = 0.75f)))
+        }
+    }
+}
+
+@Composable
+private fun VerticalGlassControl(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    hueControl: Boolean,
+    valueLabel: String,
+    modifier: Modifier = Modifier,
+    onValueChange: (Float) -> Unit,
+    onFinish: () -> Unit = {}
+) {
+    val change by rememberUpdatedState(onValueChange)
+    val finish by rememberUpdatedState(onFinish)
+    val fraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+    val railBrush = if (hueControl) {
+        Brush.verticalGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))
+    } else {
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.92f), Color(0xFF777985), Color(0xFF171820)))
+    }
+    Column(
+        modifier.clip(RoundedCornerShape(25.dp))
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.055f))))
+            .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(25.dp))
+            .padding(horizontal = 6.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(label, fontSize = 8.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.SemiBold,
+            color = Color.White.copy(alpha = 0.82f), maxLines = 1)
+        Box(
+            Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp)
+                .pointerInput(range) {
+                    fun update(y: Float) {
+                        val f = (1f - y / size.height).coerceIn(0f, 1f)
+                        change(range.start + f * (range.endInclusive - range.start))
+                    }
+                    detectTapGestures { update(it.y); finish() }
+                }
+                .pointerInput(range) {
+                    fun update(y: Float) {
+                        val f = (1f - y / size.height).coerceIn(0f, 1f)
+                        change(range.start + f * (range.endInclusive - range.start))
+                    }
+                    detectDragGestures(onDragStart = { update(it.y) }, onDragEnd = { finish() }) { input, _ ->
+                        input.consume()
+                        update(input.position.y)
+                    }
+                }
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val railWidth = 8.dp.toPx()
+                val top = 8.dp.toPx()
+                val railHeight = (size.height - top * 2).coerceAtLeast(1f)
+                val x = size.width / 2f
+                drawRoundRect(
+                    railBrush,
+                    topLeft = Offset(x - railWidth / 2f, top),
+                    size = androidx.compose.ui.geometry.Size(railWidth, railHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
+                )
+                val y = top + (1f - fraction) * railHeight
+                drawCircle(Color.White.copy(alpha = 0.20f), radius = 15.dp.toPx(), center = Offset(x, y))
+                drawCircle(Color.White.copy(alpha = 0.96f), radius = 10.dp.toPx(), center = Offset(x, y))
+                val thumb = if (hueControl) Color(android.graphics.Color.HSVToColor(floatArrayOf(value, 1f, 1f))) else Color(0xFFE7E5EF)
+                drawCircle(thumb, radius = 7.dp.toPx(), center = Offset(x, y))
+            }
+        }
+        Text(valueLabel, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.84f), maxLines = 1)
     }
 }
 
