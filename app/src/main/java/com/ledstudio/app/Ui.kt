@@ -135,7 +135,8 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
         }
     }
 
-    CompositionLocalProvider(LocalAccent provides Color(0xFF8B7BFF)) {
+    val accent = Color(0xFF8B7BFF)
+    CompositionLocalProvider(LocalAccent provides accent) {
         Box(Modifier.fillMaxSize()) {
             Crossfade(targetState = tab, animationSpec = tween(360), label = "tab-wallpaper") { page ->
                 val (wallpaper, scrim) = when (page) {
