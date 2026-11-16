@@ -21,17 +21,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -49,48 +46,6 @@ import kotlin.math.roundToInt
 // ---------------------------------------------------------------------------------------------
 
 val LocalAccent = compositionLocalOf { Color(0xFF8B7BFF) }
-
-fun shiftHue(c: Color, deg: Float): Color {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(c.toArgb(), hsv)
-    hsv[0] = (hsv[0] + deg + 360f) % 360f
-    return Color(android.graphics.Color.HSVToColor(hsv))
-}
-
-/** The wallpaper behind all glass: deep gradient, colour blobs that follow the LED colour, bokeh rings and a strip of LEDs. */
-fun DrawScope.drawBackdrop(sz: Size, accent: Color) {
-    val w = sz.width; val h = sz.height
-    drawRect(Brush.verticalGradient(listOf(Color(0xFF0B0C16), Color(0xFF05060B)), startY = 0f, endY = h), size = sz)
-    val a2 = shiftHue(accent, 70f); val a3 = shiftHue(accent, -70f)
-    fun blob(c: Color, cx: Float, cy: Float, r: Float, al: Float) {
-        val center = Offset(cx * w, cy * h)
-        drawCircle(Brush.radialGradient(listOf(c.copy(alpha = al), Color.Transparent), center = center, radius = r * w), radius = r * w, center = center)
-    }
-    blob(accent, 0.18f, 0.10f, 0.85f, 0.60f)
-    blob(a2, 0.98f, 0.36f, 0.70f, 0.48f)
-    blob(a3, 0.05f, 0.66f, 0.75f, 0.42f)
-    blob(accent, 0.80f, 0.97f, 0.70f, 0.38f)
-    // bokeh: sharp shapes for the glass to soften
-    val rings = listOf(
-        floatArrayOf(0.15f, 0.30f, 0.09f), floatArrayOf(0.82f, 0.15f, 0.06f), floatArrayOf(0.60f, 0.48f, 0.12f),
-        floatArrayOf(0.25f, 0.62f, 0.07f), floatArrayOf(0.90f, 0.70f, 0.10f), floatArrayOf(0.45f, 0.86f, 0.08f),
-        floatArrayOf(0.08f, 0.92f, 0.05f), floatArrayOf(0.70f, 0.28f, 0.04f))
-    rings.forEachIndexed { i, r ->
-        val c = Offset(r[0] * w, r[1] * h)
-        if (i % 2 == 0) drawCircle(Color.White.copy(alpha = 0.10f), radius = r[2] * w, center = c, style = Stroke(width = 2.dp.toPx()))
-        else drawCircle(Color.White.copy(alpha = 0.07f), radius = r[2] * w, center = c)
-    }
-    // a strip of LEDs running diagonally across the screen
-    val n = 22
-    for (i in 0 until n) {
-        val t = i / (n - 1f)
-        val x = (0.04f + 0.92f * t) * w
-        val y = (0.90f - 0.30f * t + 0.03f * kotlin.math.sin(t * 9f)) * h
-        val col = androidx.compose.ui.graphics.lerp(a3, a2, t)
-        drawCircle(col.copy(alpha = 0.22f), radius = 14.dp.toPx(), center = Offset(x, y))
-        drawCircle(col.copy(alpha = 0.95f), radius = 3.dp.toPx(), center = Offset(x, y))
-    }
-}
 
 private val RimBrush = Brush.linearGradient(listOf(
     Color.White.copy(alpha = 0.62f), Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.04f), Color.White.copy(alpha = 0.30f)))

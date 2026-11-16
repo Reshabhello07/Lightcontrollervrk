@@ -12,11 +12,12 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -36,11 +37,14 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -51,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.math.max
 import kotlin.math.atan2
 import kotlin.math.PI
 import kotlin.math.roundToInt
@@ -82,6 +85,7 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
     var displayedTab by remember { mutableIntStateOf(tab) }
     val pageAlpha = remember { Animatable(1f) }
     val pageOffset = remember { Animatable(0f) }
+    val pageBlur = remember { Animatable(0f) }
     val morph = remember { Animatable(1f) }
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageSize by remember { mutableStateOf(IntSize.Zero) }
@@ -93,29 +97,20 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
             previousTab = tab
             morph.snapTo(0f)
             launch { morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
-            pageAlpha.animateTo(0f, tween(90, easing = FastOutSlowInEasing))
+            coroutineScope {
+                launch { pageBlur.animateTo(12f, tween(90, easing = FastOutSlowInEasing)) }
+                pageAlpha.animateTo(0f, tween(90, easing = FastOutSlowInEasing))
+            }
             displayedTab = tab
             pageOffset.snapTo(direction * 0.12f)
             pageAlpha.snapTo(0f)
             coroutineScope {
-                launch { pageAlpha.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
+                launch { pageAlpha.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
                 launch { pageOffset.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+                launch { pageBlur.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
             }
         }
     }
-
-    // glass accent follows the colour the strip is showing
-    var live by remember { mutableStateOf(Color(0xFF8B7BFF)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val hsv = FloatArray(3)
-            android.graphics.Color.colorToHSV(Led.cur, hsv)
-            if (hsv[2] > 0.25f && hsv[1] > 0.25f)
-                live = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsv[0], max(hsv[1], 0.6f), 1f)))
-            delay(500)
-        }
-    }
-    val accent by animateColorAsState(live, tween(180), label = "accent")
 
     LaunchedEffect(Unit) {   // auto-connect on open when permissions are already granted
         if (Build.VERSION.SDK_INT < 31 || (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
@@ -140,13 +135,29 @@ fun App(initialTab: Int = 0, autoStartSmartTempo: Boolean = false) {
         }
     }
 
-    CompositionLocalProvider(LocalAccent provides accent) {
+    CompositionLocalProvider(LocalAccent provides Color(0xFF8B7BFF)) {
         Box(Modifier.fillMaxSize()) {
-            Canvas(Modifier.fillMaxSize()) { drawBackdrop(size, accent) }
+            Crossfade(targetState = tab, animationSpec = tween(360), label = "tab-wallpaper") { page ->
+                val (wallpaper, scrim) = when (page) {
+                    0 -> R.drawable.led1 to 0.58f
+                    1 -> R.drawable.led2 to 0.34f
+                    2 -> R.drawable.led3 to 0.78f
+                    else -> R.drawable.led4 to 0.78f
+                }
+                Box(Modifier.fillMaxSize()) {
+                    Image(
+                        painter = painterResource(wallpaper),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
+                }
+            }
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }.graphicsLayer {
+                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }.blur(pageBlur.value.dp).graphicsLayer {
                     alpha = pageAlpha.value
                     translationX = pageOffset.value * size.width
                     scaleX = 0.985f + (1f - pageAlpha.value) * 0.015f
