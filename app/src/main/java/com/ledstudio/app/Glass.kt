@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import com.wexpa.liquidglass.Glass
-import com.wexpa.liquidglass.glassEffect
 import com.wexpa.liquidglass.GlassTabBar as LiquidGlassTabBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,7 +81,7 @@ fun DrawScope.drawBackdrop(sz: Size, accent: Color) {
         else drawCircle(Color.White.copy(alpha = 0.07f), radius = r[2] * w, center = c)
     }
     // a strip of LEDs running diagonally across the screen
-    val n = 34
+    val n = 22
     for (i in 0 until n) {
         val t = i / (n - 1f)
         val x = (0.04f + 0.92f * t) * w
@@ -110,25 +108,13 @@ fun GlassCard(
     pad: Dp = 18.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val top = if (strong) 0.11f else 0.07f
-    val bottom = if (strong) 0.04f else 0.025f
-    Box(modifier
-        .fillMaxWidth()
-        .glassEffect(Glass.Regular, shape)
-        .clip(shape)
-        .border(1.dp, RimBrush, shape)
-    ) {
-        Box(Modifier.matchParentSize().background(Color.White.copy(alpha = if (strong) 0.045f else 0.03f)))
+    val top = if (strong) 0.14f else 0.10f
+    val bottom = if (strong) 0.06f else 0.035f
+    Box(modifier.fillMaxWidth().clip(shape).border(1.dp, RimBrush, shape)) {
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.White.copy(alpha = top), Color.White.copy(alpha = bottom)))))
-        Box(Modifier.matchParentSize().drawBehind {
-            drawRect(
-                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent), startY = 0f, endY = size.height * 0.45f),
-                size = Size(size.width, size.height * 0.45f))
-        })
         Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
 }
-
 @Composable
 fun GlassButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, onClick: () -> Unit) {
     val accent = LocalAccent.current
@@ -142,7 +128,6 @@ fun GlassButton(text: String, modifier: Modifier = Modifier, primary: Boolean = 
     Box(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .glassEffect(Glass.Regular, shape)
             .clip(shape)
             .background(fill)
             .border(1.dp, RimBrush, shape)
@@ -175,13 +160,12 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     val track by animateColorAsState(if (checked) accent.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.20f), label = "swc")
     Box(Modifier
         .size(width = 54.dp, height = 32.dp)
-        .glassEffect(Glass.Regular, CircleShape)
         .clip(CircleShape)
         .background(track)
         .border(1.dp, RimBrush, CircleShape)
         .tap { onChange(!checked) }
         .padding(3.dp)) {
-        Box(Modifier.offset(x = x).size(26.dp).glassEffect(Glass.Regular, CircleShape).clip(CircleShape).background(Color.White.copy(alpha = 0.88f)))
+        Box(Modifier.offset(x = x).size(26.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.88f)))
     }
 }
 

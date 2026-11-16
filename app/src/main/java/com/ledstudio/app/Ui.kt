@@ -48,8 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.wexpa.liquidglass.Glass
-import com.wexpa.liquidglass.glassEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -352,7 +350,7 @@ private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) 
         textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
         cursorBrush = SolidColor(accent),
         decorationBox = { inner ->
-            Box(Modifier.fillMaxWidth().glassEffect(Glass.Regular, shape).clip(shape).background(Color.White.copy(alpha = 0.08f))
+            Box(Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.08f))
                 .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f))), shape)
                 .padding(horizontal = 18.dp, vertical = 12.dp)) {
                 if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = Color.White.copy(alpha = 0.40f))
