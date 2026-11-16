@@ -16,14 +16,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,6 +37,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -56,6 +49,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.atan2
@@ -85,6 +79,9 @@ fun App() {
     val c = remember { Ctl(ctx) }
     var tab by remember { mutableStateOf(0) }
     var previousTab by remember { mutableIntStateOf(tab) }
+    var displayedTab by remember { mutableIntStateOf(tab) }
+    val pageAlpha = remember { Animatable(1f) }
+    val pageOffset = remember { Animatable(0f) }
     val morph = remember { Animatable(1f) }
     var pageOrigin by remember { mutableStateOf(Offset.Zero) }
     var pageSize by remember { mutableStateOf(IntSize.Zero) }
@@ -92,9 +89,18 @@ fun App() {
     var navSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(tab) {
         if (previousTab != tab) {
+            val direction = if (tab > previousTab) 1f else -1f
             previousTab = tab
             morph.snapTo(0f)
-            morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+            launch { morph.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
+            pageAlpha.animateTo(0f, tween(90, easing = FastOutSlowInEasing))
+            displayedTab = tab
+            pageOffset.snapTo(direction * 0.12f)
+            pageAlpha.snapTo(0f)
+            coroutineScope {
+                launch { pageAlpha.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
+                launch { pageOffset.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+            }
         }
     }
 
@@ -134,22 +140,17 @@ fun App() {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 14.dp)) {
                 Header(c, onConnect = { perm.launch(perms()) })
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }) {
-                    AnimatedContent(
-                        targetState = tab,
-                        transitionSpec = {
-                            val direction = if (targetState > initialState) 1 else -1
-                            (fadeIn(tween(300, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { direction * it / 2 } + scaleIn(initialScale = 0.97f, animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
-                                (fadeOut(tween(220, easing = FastOutSlowInEasing)) + slideOutHorizontally(tween(280, easing = FastOutSlowInEasing)) { -direction * it / 4 } + scaleOut(targetScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing)))
-                        },
-                        label = "tab"
-                    ) { page ->
-                        when (page) {
-                            0 -> MusicTab(c)
-                            1 -> ScenesTab(c)
-                            2 -> SyncTab(c)
-                            else -> SettingsTab(c, onConnect = { perm.launch(perms()) })
-                        }
+                Box(Modifier.weight(1f).onGloballyPositioned { pageOrigin = it.positionInRoot(); pageSize = it.size }.graphicsLayer {
+                    alpha = pageAlpha.value
+                    translationX = pageOffset.value * size.width
+                    scaleX = 0.985f + (1f - pageAlpha.value) * 0.015f
+                    scaleY = 0.985f + (1f - pageAlpha.value) * 0.015f
+                }) {
+                    when (displayedTab) {
+                        0 -> MusicTab(c)
+                        1 -> ScenesTab(c)
+                        2 -> SyncTab(c)
+                        else -> SettingsTab(c, onConnect = { perm.launch(perms()) })
                     }
                 }
                 GlassTabBar(tab, { tab = it }, Modifier.navigationBarsPadding().padding(top = 8.dp, bottom = 8.dp).onGloballyPositioned { navOrigin = it.positionInRoot(); navSize = it.size })
