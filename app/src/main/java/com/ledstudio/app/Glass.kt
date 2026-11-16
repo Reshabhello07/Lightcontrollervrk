@@ -134,22 +134,40 @@ fun GlassButton(text: String, modifier: Modifier = Modifier, primary: Boolean = 
     val accent = LocalAccent.current
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val sc by animateFloatAsState(if (pressed) 0.93f else 1f, spring(dampingRatio = 0.5f, stiffness = 520f), label = "press")
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.62f, stiffness = 420f), label = "press")
+    val bubble by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.72f, stiffness = 260f), label = "glass-bubble")
     val shape = RoundedCornerShape(50)
-    val fill = if (primary) Brush.verticalGradient(listOf(accent.copy(alpha = 0.80f), accent.copy(alpha = 0.38f)))
-    else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.26f), Color.White.copy(alpha = 0.09f)))
-    Box(modifier
-        .graphicsLayer { scaleX = sc; scaleY = sc }
-        .clip(shape)
-        .background(fill)
-        .border(1.dp, RimBrush, shape)
-        .clickable(interactionSource = src, indication = null, onClick = onClick)
-        .padding(horizontal = 18.dp, vertical = 11.dp),
-        contentAlignment = Alignment.Center) {
+    val fill = if (primary) Brush.verticalGradient(listOf(accent.copy(alpha = 0.66f), accent.copy(alpha = 0.24f)))
+    else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.055f)))
+    Box(
+        modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .glassEffect(Glass.Regular, shape)
+            .clip(shape)
+            .background(fill)
+            .border(1.dp, RimBrush, shape)
+            .clickable(interactionSource = src, indication = null, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 11.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            if (bubble > 0.001f) {
+                val center = Offset(size.width * (0.16f + 0.68f * bubble), size.height * 0.5f)
+                val radius = maxOf(size.width, size.height) * 0.86f
+                drawCircle(
+                    Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = 0.42f * bubble), accent.copy(alpha = 0.20f * bubble), Color.Transparent),
+                        center = center,
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = center
+                )
+            }
+        }
         Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
     }
 }
-
 @Composable
 fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     val accent = LocalAccent.current
@@ -157,12 +175,13 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     val track by animateColorAsState(if (checked) accent.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.20f), label = "swc")
     Box(Modifier
         .size(width = 54.dp, height = 32.dp)
+        .glassEffect(Glass.Regular, CircleShape)
         .clip(CircleShape)
         .background(track)
         .border(1.dp, RimBrush, CircleShape)
         .tap { onChange(!checked) }
         .padding(3.dp)) {
-        Box(Modifier.offset(x = x).size(26.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.97f)))
+        Box(Modifier.offset(x = x).size(26.dp).glassEffect(Glass.Regular, CircleShape).clip(CircleShape).background(Color.White.copy(alpha = 0.88f)))
     }
 }
 

@@ -48,6 +48,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wexpa.liquidglass.Glass
+import com.wexpa.liquidglass.glassEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -222,48 +224,17 @@ private fun TabColumn(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun MusicTab(c: Ctl) {
-    val ctx = LocalContext.current
     TabColumn {
         GlassCard {
             Label("Music · phone audio, no mic")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Breathing", primary = c.active == "m0") { c.active = "m0"; c.go("music", 0) }
                 GlassButton("Spectrum", primary = c.active == "m1") { c.active = "m1"; c.go("music", 1) }
                 GlassButton("Smart tempo", primary = c.active == "m2") { c.active = "m2"; c.go("music", 2) }
-                GlassButton("Beat drop", primary = c.active == "m3") { c.active = "m3"; c.go("music", 3) }
-                GlassButton("Cover mesh", primary = c.active == "cover") { stopAll(ctx); c.active = "cover"; Engine.cover() }
             }
             if (Engine.bpm.value > 0) Body("♪  ${Engine.bpm.value} BPM", 0.7f)
         }
-        GlassCard {
-            Label("Tuning")
-            SliderRow("Sensitivity", "%.1f×".format(c.sens), c.sens, 0.3f..3f, onChange = { c.sens = it })
-            SliderRow("Smoothness", "${((c.smooth - 0.75f) / 0.22f * 100).roundToInt()}%", c.smooth, 0.75f..0.97f,
-                onChange = { c.smooth = it; Engine.decay = it })
-            SwitchRow("Use album cover colors", c.useCover) { c.useCover = it }
-        }
-        GlassCard {
-            Label("Make this vibe")
-            Body("Capture the colors and beat accents of a short moment, then replay it later.", 0.68f)
-            if (!c.active.startsWith("m")) Body("Start a music mode above before recording.", 0.55f)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton(if (Engine.vibeRecording.value) "Stop + save" else "Capture vibe", primary = Engine.vibeRecording.value) {
-                    if (Engine.vibeRecording.value) Engine.finishVibeCapture()
-                    else if (c.active.startsWith("m")) Engine.startVibeCapture()
-                }
-                if (Engine.vibeHasSaved.value) GlassButton("Replay vibe") { stopAll(ctx, afterglow = false); c.active = ""; Engine.playVibe() }
-            }
-            if (Engine.vibeRecording.value) Body("Recording · ${Engine.vibeSampleCount.value} moments", 0.75f)
-            else if (Engine.vibeHasSaved.value) Body("${Engine.vibeSampleCount.value} saved moments · recording auto-stops after about 36 seconds", 0.55f)
-            GlassButton(if (Engine.glitchFreeze.value) "Glitch-freeze · armed" else "Glitch-freeze") {
-                Engine.glitchFreeze.value = !Engine.glitchFreeze.value
-            }
-            Body("When armed, each detected beat briefly freezes the color, then snaps into a bright flash.", 0.55f)
-            Body("When music pauses, Afterglow slowly dissolves its recent colors over a minute.", 0.55f)
-        }
     }
 }
-
 @Composable
 private fun ScenesTab(c: Ctl) {
     val ctx = LocalContext.current
@@ -320,7 +291,7 @@ private fun ScenesTab(c: Ctl) {
         }
         GlassCard {
             Label("Effect presets")
-            PRESETS.forEach { e ->
+            PRESETS.filterNot { it.name == "Breathing" }.forEach { e ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Body(e.name, 0.9f)
                     Spacer(Modifier.weight(1f))
@@ -351,110 +322,5 @@ private fun SyncTab(c: Ctl) {
             SwitchRow("Battery alerts", Extras.battOn.value) { Extras.battOn.value = it }
             GlassButton("Show battery level") { Extras.showBattery(ctx) }
         }
-        GlassCard {
-            Label("Minecraft sync")
-            Body(Extras.mcStatus.value, 0.7f)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Start", primary = true) { stopAll(ctx, afterglow = false); c.active = ""; Extras.mcStart() }
-                GlassButton("Stop") { Extras.mcStop() }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsTab(c: Ctl, onConnect: () -> Unit) {
-    val ctx = LocalContext.current
-    TabColumn {
-        GlassCard {
-            Label("Connection")
-            Body(Led.status.value, 0.85f)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassButton("Connect", primary = true, onClick = onConnect)
-                GlassButton("Disconnect") { stopAll(ctx, afterglow = false); c.active = ""; Led.disconnect() }
-            }
-        }
-        GlassCard {
-            Label("LED strip")
-            SliderRow("Pixel count", "${c.pix.roundToInt()}", c.pix, 1f..255f, step = 1f, onChange = { c.pix = it }, onFinish = { savePixelCount(ctx, c.pix.roundToInt()) })
-            GlassButton("Apply pixel count") { savePixelCount(ctx, c.pix.roundToInt()); Led.setPixels(c.pix.roundToInt()) }
-        }
-        GlassCard {
-            Label("Performance report")
-            Body("Tap Problem, then reproduce the stutter for 20 seconds. A report will open in the share sheet.", 0.75f)
-            Body(ProblemCapture.status.value, 0.65f)
-            GlassButton(if (ProblemCapture.status.value.startsWith("Capturing")) "Capturing…" else "Problem", primary = true) { ProblemCapture.start(ctx) }
-        }
-        GlassCard {
-            Label("Quick settings tile")
-            Body("Swipe down, tap the pencil, and drag “LED Smart Tempo” into your tiles. Tap once to start, tap again to turn off and disconnect.", 0.7f)
-        }
-    }
-}
-@Composable
-private fun GlassField(value: String, onChange: (String) -> Unit, hint: String) {
-    val accent = LocalAccent.current
-    val shape = RoundedCornerShape(50)
-    BasicTextField(
-        value = value, onValueChange = onChange, singleLine = true,
-        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-        cursorBrush = SolidColor(accent),
-        decorationBox = { inner ->
-            Box(Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.10f))
-                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f))), shape)
-                .padding(horizontal = 18.dp, vertical = 12.dp)) {
-                if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = Color.White.copy(alpha = 0.40f))
-                inner()
-            }
-        }
-    )
-}
-
-@Composable
-private fun ColorReactor(c: Ctl, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val ripple = remember { Animatable(1f) }
-    Box(modifier.pointerInput(c) {
-        var brightnessGesture = false
-        detectDragGestures(
-            onDragStart = { down ->
-                val center = Offset(size.width / 2f, size.height / 2f)
-                brightnessGesture = (down - center).getDistance() < minOf(size.width, size.height) * 0.24f
-                stopAll(ctx, afterglow = false)
-                c.active = ""
-            },
-            onDragEnd = {
-                scope.launch { ripple.snapTo(0f); ripple.animateTo(1f, tween(520)) }
-            }
-        ) { change, _ ->
-            change.consume()
-            if (brightnessGesture) {
-                Led.bright.value = (1f - change.position.y / size.height).coerceIn(0.05f, 1f)
-            } else {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val angle = atan2(change.position.y - center.y, change.position.x - center.x) * 180f / PI.toFloat()
-                c.hue = (angle + 360f) % 360f
-                Led.fadeTo(Led.hsv(c.hue), 45, force = true)
-            }
-        }
-    }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val s = size.minDimension
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val selected = Color(Led.hsv(c.hue))
-            val wheel = listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
-            drawCircle(Brush.sweepGradient(wheel, center), radius = s * 0.45f, center = center, style = Stroke(width = 13.dp.toPx()))
-            drawCircle(
-                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.92f), selected, Color.Black.copy(alpha = 0.78f)), center = center, radius = s * 0.35f),
-                radius = s * 0.34f,
-                center = center
-            )
-            if (ripple.value < 1f) {
-                drawCircle(selected.copy(alpha = 1f - ripple.value), radius = s * (0.26f + 0.16f * ripple.value), center = center, style = Stroke(width = 2.dp.toPx()))
-            }
-            drawCircle(Color.White.copy(alpha = 0.52f), radius = s * 0.045f, center = Offset(center.x - s * 0.12f, center.y - s * 0.14f))
-        }
-        Text("${(Led.bright.value * 100).roundToInt()}%", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }

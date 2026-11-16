@@ -6,7 +6,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
-// Keeps the app (and the strip connection) alive in the background, e.g. while you play Minecraft.
+// Keeps the app and strip connection alive while LED effects run in the background.
 class KeepAliveService : Service() {
     override fun onBind(i: Intent?): IBinder? = null
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {

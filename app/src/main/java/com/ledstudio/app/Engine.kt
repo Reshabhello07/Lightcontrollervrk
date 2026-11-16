@@ -11,7 +11,6 @@ import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
@@ -20,12 +19,9 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
-import org.json.JSONArray
-import org.json.JSONObject
 
 data class Step(val c: Int, val hold: Int, val fade: Int)
 data class Effect(val name: String, val steps: List<Step>)
-data class VibeFrame(val color: Int, val beat: Boolean)
 
 val NOTIF_COLORS = mapOf(
     "com.whatsapp" to 0xFF25D366.toInt(), "com.whatsapp.w4b" to 0xFF25D366.toInt(),
@@ -109,72 +105,21 @@ object Engine {
     val notifOn = mutableStateOf(true)
     val bpm = mutableStateOf(0)
     val fx = mutableStateOf(1)
-    val vibeRecording = mutableStateOf(false)
-    val vibeHasSaved = mutableStateOf(false)
-    val vibeSampleCount = mutableStateOf(0)
     val glitchFreeze = mutableStateOf(false)
-    private val capturedVibe = mutableListOf<VibeFrame>()
-    private val savedVibe = mutableStateListOf<VibeFrame>()
     private val musicMemory = mutableListOf<Int>()
-    private var vibeLoaded = false
     @Volatile private var activeMode = ""
     private var afterglowJob: Job? = null
 
     fun init(c: Context) {
         app = c.applicationContext
         Extras.initPhone(app)
-        if (!vibeLoaded) {
-            vibeLoaded = true
-            try {
-                val json = JSONArray(app.getSharedPreferences("vibe", 0).getString("frames", "[]") ?: "[]")
-                for (i in 0 until json.length()) {
-                    val frame = json.getJSONObject(i)
-                    savedVibe.add(VibeFrame(frame.getInt("color"), frame.optBoolean("beat")))
-                }
-                vibeHasSaved.value = savedVibe.isNotEmpty()
-                vibeSampleCount.value = savedVibe.size
-            } catch (_: Exception) { savedVibe.clear() }
-        }
-    }
-
-    fun startVibeCapture() {
-        synchronized(capturedVibe) { capturedVibe.clear() }
-        vibeSampleCount.value = 0
-        vibeRecording.value = true
-    }
-
-    fun finishVibeCapture() {
-        vibeRecording.value = false
-        val frames = synchronized(capturedVibe) { capturedVibe.toList() }
-        if (frames.isEmpty()) return
-        savedVibe.clear(); savedVibe.addAll(frames)
-        vibeSampleCount.value = frames.size
-        vibeHasSaved.value = true
-        val json = JSONArray()
-        frames.forEach { json.put(JSONObject().put("color", it.color).put("beat", it.beat)) }
-        if (vibeLoaded) app.getSharedPreferences("vibe", 0).edit().putString("frames", json.toString()).apply()
-    }
-
-    fun playVibe() {
-        val frames = savedVibe.toList()
-        if (frames.isEmpty()) return
-        run("vibe") {
-            for (frame in frames) {
-                if (!isActive) break
-                Led.fadeTo(frame.color, if (frame.beat) 24 else 110, smooth = !frame.beat, force = true)
-                delay(if (frame.beat) 95 else 120)
-            }
-            Led.fadeTo(Color.BLACK, 1800, smooth = true, force = true)
-        }
     }
 
     fun stop(afterglow: Boolean = true) {
         val previousMode = activeMode
         activeMode = ""
-        if (previousMode == "music" && vibeRecording.value) finishVibeCapture()
         job?.cancel(); job = null
         bpm.value = 0
-        Extras.mcStop()
         if (!afterglow) afterglowJob?.cancel()
         else if (previousMode == "music" && afterglowJob?.isActive != true) startAfterglow()
     }
@@ -299,7 +244,7 @@ object Engine {
         val hist = FloatArray(43); var hi = 0; var prevE = 0f; var bLast = 0L; val bIbi = ArrayList<Long>()
         var breath = 0.12f; var lo = 0f; var hiV = 0f; var inited = false; var base = pal[0]
         synchronized(musicMemory) { musicMemory.clear() }
-        var lastMemoryAt = 0L; var lastVibeAt = 0L; var lastAudibleAt = System.currentTimeMillis()
+        var lastMemoryAt = 0L; var lastAudibleAt = System.currentTimeMillis()
         var silentAfterglow = false; var glitchPrevious = 0f; var lastGlitchBeat = 0L
         var freezeUntil = 0L; var burstUntil = 0L; var burstColor = Color.WHITE
         rec.startRecording()
@@ -351,15 +296,6 @@ object Engine {
                         burstUntil = now + 145
                         Led.fadeTo(frozen, 75, smooth = true, force = true)
                     }
-                }
-                if (vibeRecording.value && audible && now - lastVibeAt >= 120) {
-                    lastVibeAt = now
-                    val count = synchronized(capturedVibe) {
-                        if (capturedVibe.size < 300) capturedVibe.add(VibeFrame(Led.cur, beatHit))
-                        capturedVibe.size
-                    }
-                    if (count % 5 == 0 || count >= 300) vibeSampleCount.value = count
-                    if (count >= 300) finishVibeCapture()
                 }
                 if (style == 0) {
                     // comfortable breathing: follow the song's loudness against its own recent quiet/loud range
