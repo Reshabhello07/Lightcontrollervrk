@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,6 +50,35 @@ val LocalAccent = compositionLocalOf { Color(0xFF8B7BFF) }
 
 private val RimBrush = Brush.linearGradient(listOf(
     Color.White.copy(alpha = 0.62f), Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.04f), Color.White.copy(alpha = 0.30f)))
+
+/** Neutral capsule glass used for moving slider thumbs, matching the navigation selector. */
+internal fun DrawScope.drawLiquidGlassThumb(center: Offset, width: Float, height: Float, pressed: Boolean) {
+    val w = width.coerceAtMost(size.width)
+    val h = height.coerceAtMost(size.height)
+    val left = center.x - w / 2f
+    val top = center.y - h / 2f
+    val shapeSize = Size(w, h)
+    val radius = CornerRadius(h / 2f, h / 2f)
+    drawRoundRect(Color.Black.copy(alpha = 0.22f), Offset(left, top + 1.5.dp.toPx()), shapeSize, radius)
+    if (pressed) {
+        drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(left - 2.dp.toPx(), top - 2.dp.toPx()),
+            Size(w + 4.dp.toPx(), h + 4.dp.toPx()), CornerRadius((h + 4.dp.toPx()) / 2f))
+    }
+    drawRoundRect(
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.20f), Color(0xFFCBD2E8).copy(alpha = 0.15f)),
+            startY = top, endY = top + h
+        ),
+        Offset(left, top), shapeSize, radius
+    )
+    drawRoundRect(Color.White.copy(alpha = 0.72f), Offset(left, top), shapeSize, radius, style = Stroke(width = 1.dp.toPx()))
+    drawRoundRect(
+        Color.White.copy(alpha = 0.55f),
+        Offset(left + w * 0.20f, top + h * 0.13f),
+        Size(w * 0.44f, h * 0.10f),
+        CornerRadius(h * 0.08f, h * 0.08f)
+    )
+}
 
 @Composable
 fun Modifier.tap(onClick: () -> Unit): Modifier =
@@ -184,21 +214,7 @@ fun GlassSlider(
                     Offset(0f, trackTop), Size(cx.coerceAtLeast(0f), th), corner)
             }
             val d = thumbDp.dp.toPx()
-            drawCircle(accent.copy(alpha = if (drag) 0.28f else 0.15f), radius = d / 2f + 8.dp.toPx(), center = Offset(cx, cy))
-            drawCircle(Color.Black.copy(alpha = 0.28f), radius = d / 2f + 1.5.dp.toPx(), center = Offset(cx, cy + 2.dp.toPx()))
-            drawCircle(
-                Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.90f), Color(0xFFE7E8F5).copy(alpha = 0.72f), accent.copy(alpha = 0.34f)),
-                    startY = cy - d / 2f, endY = cy + d / 2f
-                ),
-                radius = d / 2f, center = Offset(cx, cy)
-            )
-            drawCircle(Color.White.copy(alpha = 0.92f), radius = d / 2f, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
-            drawOval(
-                Color.White.copy(alpha = 0.72f),
-                topLeft = Offset(cx - d * 0.24f, cy - d * 0.30f),
-                size = Size(d * 0.42f, d * 0.19f)
-            )
+            drawLiquidGlassThumb(Offset(cx, cy), d, d * 0.78f, pressed = drag)
         }
     }
 }

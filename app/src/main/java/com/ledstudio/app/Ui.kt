@@ -493,18 +493,12 @@ private fun VerticalGlassControl(
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
                 )
                 val y = top + (1f - fraction) * railHeight
-                val bubbleRadius = (if (dragging) 17.dp else 14.dp).toPx()
-                val tint = if (hueControl) Color(android.graphics.Color.HSVToColor(floatArrayOf(value, 0.62f, 1f))) else Color.White
-                drawCircle(tint.copy(alpha = 0.20f), radius = bubbleRadius + 7.dp.toPx(), center = Offset(x, y))
-                drawCircle(
-                    Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = 0.84f), tint.copy(alpha = 0.46f), Color(0xFFB9C7E8).copy(alpha = 0.55f)),
-                        startY = y - bubbleRadius, endY = y + bubbleRadius
-                    ),
-                    radius = bubbleRadius, center = Offset(x, y)
+                drawLiquidGlassThumb(
+                    center = Offset(x, y),
+                    width = size.width - (if (dragging) 1.dp.toPx() else 3.dp.toPx()),
+                    height = if (dragging) 31.dp.toPx() else 28.dp.toPx(),
+                    pressed = dragging
                 )
-                drawCircle(Color.White.copy(alpha = 0.88f), radius = bubbleRadius, center = Offset(x, y), style = Stroke(width = 1.2.dp.toPx()))
-                drawOval(Color.White.copy(alpha = 0.65f), topLeft = Offset(x - bubbleRadius * 0.48f, y - bubbleRadius * 0.58f), size = androidx.compose.ui.geometry.Size(bubbleRadius * 0.62f, bubbleRadius * 0.28f))
             }
         }
         Text(valueLabel, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.White.copy(alpha = 0.84f), maxLines = 1)
